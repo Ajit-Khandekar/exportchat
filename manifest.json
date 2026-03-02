@@ -1,0 +1,95 @@
+{
+  "manifest_version": 3,
+  "name": "ExportChat",
+  "description": "Export AI chat conversations (ChatGPT, Claude, Gemini, Perplexity) to Markdown, PDF, Text, HTML, or JSON with one click. All processing happens locally in your browser.",
+  "version": "1.0.0",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [],
+  "host_permissions": [
+    "https://chat.openai.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*",
+    "https://www.perplexity.ai/*",
+    "https://perplexity.ai/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": [
+        "libs/turndown.js",
+        "libs/jspdf.min.js",
+        "export/markdown.js",
+        "export/pdf.js",
+        "export/text.js",
+        "export/html.js",
+        "export/json.js",
+        "ui/button.js",
+        "content/claude.js"
+      ],
+      "css": ["ui/button.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://chat.openai.com/*"],
+      "js": [
+        "libs/turndown.js",
+        "libs/jspdf.min.js",
+        "export/markdown.js",
+        "export/pdf.js",
+        "export/text.js",
+        "export/html.js",
+        "export/json.js",
+        "ui/button.js",
+        "content/chatgpt.js"
+      ],
+      "css": ["ui/button.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": [
+        "libs/turndown.js",
+        "libs/jspdf.min.js",
+        "export/markdown.js",
+        "export/pdf.js",
+        "export/text.js",
+        "export/html.js",
+        "export/json.js",
+        "ui/button.js",
+        "content/gemini.js"
+      ],
+      "css": ["ui/button.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.perplexity.ai/*",
+        "https://perplexity.ai/*"
+      ],
+      "js": [
+        "libs/turndown.js",
+        "libs/jspdf.min.js",
+        "export/markdown.js",
+        "export/pdf.js",
+        "export/text.js",
+        "export/html.js",
+        "export/json.js",
+        "ui/button.js",
+        "content/perplexity.js"
+      ],
+      "css": ["ui/button.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "ExportChat"
+  }
+}

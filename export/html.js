@@ -1,0 +1,48 @@
+// HTML export for ExportChat
+
+(function initExportChatHTML() {
+  window.ExportChat = window.ExportChat || {};
+
+  function sanitizeFilename(name) {
+    return (name || "chat")
+      .replace(/[\\/:*?"<>|]+/g, "_")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120) || "chat";
+  }
+
+  function downloadFile(filename, mimeType, content) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  window.ExportChat.exportAsHTML = function exportAsHTML(chat) {
+    if (!chat || !chat.html) {
+      console.warn("[ExportChat] No HTML content to export.");
+      return;
+    }
+
+    const title = chat.title || "AI Chat";
+    const fullHTML =
+      "<!doctype html>" +
+      '<html lang="en">' +
+      "<head>" +
+      '<meta charset="utf-8" />' +
+      `<title>${title}</title>` +
+      "</head>" +
+      "<body>" +
+      chat.html +
+      "</body></html>";
+
+    const filename = sanitizeFilename(chat.title || "chat") + ".html";
+    downloadFile(filename, "text/html;charset=utf-8", fullHTML);
+  };
+})();
+
