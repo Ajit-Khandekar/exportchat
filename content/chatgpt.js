@@ -1,4 +1,4 @@
-// Content script for ChatGPT (chat.openai.com)
+// Content script for ChatGPT (chat.openai.com and chatgpt.com)
 
 (function initChatGPTExportChat() {
   window.ExportChat = window.ExportChat || {};
@@ -11,26 +11,18 @@
   window.ExportChat.platformInitialized = true;
 
   function getChatGPTTitle() {
-    // Try to read the conversation title from the left sidebar or header
-    const possibleSelectors = [
-      'nav [data-testid="conversation-title"]',
-      'nav [data-test="conversation-title"]',
-      'header h1',
-      'h1',
-      'nav [role="treeitem"][aria-current="page"] span',
-    ];
-
-    for (const sel of possibleSelectors) {
-      const el = document.querySelector(sel);
-      if (el && el.textContent && el.textContent.trim().length > 0) {
-        return el.textContent.trim();
-      }
+    // Prefer active conversation in sidebar (actual chat title), then main/header
+    const sidebarActive = document.querySelector('nav [role="treeitem"][aria-current="page"] span, nav [data-testid="conversation-title"]');
+    if (sidebarActive && sidebarActive.textContent && sidebarActive.textContent.trim()) {
+      return sidebarActive.textContent.trim();
     }
-
+    const mainTitle = document.querySelector("main h1, header h1");
+    if (mainTitle && mainTitle.textContent && mainTitle.textContent.trim()) {
+      return mainTitle.textContent.trim();
+    }
     if (document.title && document.title.trim()) {
       return document.title.replace(/ - ChatGPT.*$/i, "").trim();
     }
-
     return "chatgpt-chat";
   }
 

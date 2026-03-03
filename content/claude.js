@@ -13,30 +13,28 @@
   window.ExportChat.platformInitialized = true;
 
   /**
-   * Try to infer the conversation title from the UI.
-   * Fall back to document.title or a generic value.
+   * Get actual conversation title (for filename); avoid sidebar/generic labels.
    */
   function getClaudeTitle() {
-    // Newer Claude UI often has a title element near the top of the page
+    const inMain = document.querySelector("main h1, main [data-testid='chat-title'], main [data-test='conversation-title']");
+    if (inMain && inMain.textContent && inMain.textContent.trim()) {
+      return inMain.textContent.trim();
+    }
     const possibleSelectors = [
       'header h1',
       '[data-testid="chat-title"]',
       '[data-test="conversation-title"]',
       'h1',
     ];
-
     for (const sel of possibleSelectors) {
       const el = document.querySelector(sel);
       if (el && el.textContent && el.textContent.trim().length > 0) {
         return el.textContent.trim();
       }
     }
-
-    // Fallbacks
     if (document.title && document.title.trim()) {
       return document.title.replace(/ - Claude.*$/i, "").trim();
     }
-
     return "claude-chat";
   }
 

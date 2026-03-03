@@ -1,4 +1,5 @@
 // Content script for Gemini (gemini.google.com)
+// Selectors: user-query, model-response (custom HTML elements)
 
 (function initGeminiExportChat() {
   window.ExportChat = window.ExportChat || {};
@@ -10,42 +11,74 @@
   window.ExportChat.platform = "gemini";
   window.ExportChat.platformInitialized = true;
 
-  function getGeminiTitle() {
-    const possibleSelectors = [
-      'header h1',
-      '[data-testid="conversation-title"]',
-      '[data-test="conversation-title"]',
-      'h1',
-    ];
+  // Generic values Gemini always shows regardless of which chat is open.
+  const GENERIC_TITLES = new Set(["google gemini", "gemini"]);
 
-    for (const sel of possibleSelectors) {
-      const el = document.querySelector(sel);
-      if (el && el.textContent && el.textContent.trim().length > 0) {
-        return el.textContent.trim();
-      }
-    }
-
-    if (document.title && document.title.trim()) {
-      return document.title.replace(/ - Gemini.*$/i, "").trim();
-    }
-
-    return "gemini-chat";
+  function titleFromFirstUserMessage() {
+    const firstQuery = document.querySelector("user-query");
+    if (!firstQuery) return null;
+    const textEl = firstQuery.querySelector(".query-text");
+    const raw = (textEl || firstQuery).innerText?.trim() || "";
+    if (!raw) return null;
+    return raw
+      .slice(0, 50)
+      .replace(/[\\/:*?"<>|]+/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
   }
 
-  function findGeminiConversationRoot() {
-    const possibleSelectors = [
-      "main [data-testid='conversation-view']",
-      "main [data-test='conversation-view']",
-      "main [role='main']",
-      "main",
-    ];
-
-    for (const sel of possibleSelectors) {
-      const el = document.querySelector(sel);
-      if (el) return el;
+  function getFilename() {
+    const docTitle = document.title.trim();
+    if (docTitle && !GENERIC_TITLES.has(docTitle.toLowerCase())) {
+      return docTitle;
     }
 
-    return null;
+    return titleFromFirstUserMessage() || "Gemini-Chat";
+  }
+
+  /**
+   * Returns the active conversation container so DOM queries are scoped to the
+   * current chat only (not sidebar history or cached panels).
+   */
+  function findActiveConversationContainer() {
+    const container =
+      document.querySelector("chat-window") ||
+      document.querySelector("infinite-scroller") ||
+      document;
+    console.log("[ExportChat] active container:", container);
+    return container;
+  }
+
+  /**
+   * Extract messages using precise DOM selectors so we avoid "You said", "Gemini said",
+   * "Show thinking", and media timestamps (they live in other nodes).
+   */
+  function extractMessages() {
+    const container = findActiveConversationContainer();
+
+    const userMessages = [...container.querySelectorAll("user-query")].map((el) => {
+      // Use '.query-text p' to exclude the cdk-visually-hidden "You said" span
+      // which lives outside .query-text, and to avoid the missing-first-word bug.
+      const userText = [...el.querySelectorAll(".query-text p")]
+        .map((p) => p.innerText.trim())
+        .filter((t) => t.length > 0)
+        .join(" ")
+        .trim();
+      return cleanMessageTextForTextOutput(userText);
+    });
+    const geminiMessages = [...container.querySelectorAll("model-response")].map((el) => {
+      const geminiEl = el.querySelector("div.markdown.markdown-main-panel");
+      // Apply timestamp cleanup at extraction time so all export paths are covered.
+      const geminiText = geminiEl ? cleanMessageTextForTextOutput(geminiEl.innerText.trim()) : "";
+      return geminiText;
+    });
+    const maxLen = Math.max(userMessages.length, geminiMessages.length);
+    const messages = [];
+    for (let i = 0; i < maxLen; i++) {
+      if (userMessages[i]) messages.push({ role: "human", text: userMessages[i] });
+      if (geminiMessages[i]) messages.push({ role: "assistant", text: geminiMessages[i] });
+    }
+    return messages;
   }
 
   function escapeHtml(str) {
@@ -57,88 +90,49 @@
       .replace(/'/g, "&#39;");
   }
 
-  function normalizeWhitespace(str) {
-    return (str || "").replace(/\s+/g, " ").trim();
+  function cleanMessageTextForTextOutput(text) {
+    if (text == null) return "";
+    return String(text)
+      // Remove media-style timestamps like "0:00 / 0:30"
+      .replace(/\d+:\d+\s*\/\s*\d+:\d+/g, "")
+      // Collapse multiple spaces left after removal
+      .replace(/\s{2,}/g, " ")
+      .trim();
   }
 
-  function extractGeminiMessages(root) {
-    if (!root) return [];
-
-    const messages = [];
-
-    const candidates = root.querySelectorAll(
-      "[data-testid*='message'], [data-test*='message'], article, section"
-    );
-
-    candidates.forEach((node) => {
-      const text = normalizeWhitespace(node.textContent || "");
-      if (!text) return;
-
-      const roleHint =
-        node.getAttribute("data-author") ||
-        node.getAttribute("data-message-author-role") ||
-        node.getAttribute("data-testid") ||
-        node.getAttribute("data-test") ||
-        "";
-
-      const lower = roleHint.toLowerCase();
-      let role = "assistant";
-      if (lower.includes("user") || lower.includes("human")) {
-        role = "human";
-      } else if (lower.includes("assistant") || lower.includes("model") || lower.includes("gemini")) {
-        role = "assistant";
-      }
-
-      messages.push({ role, text });
-    });
-
-    return messages;
-  }
-
-  function buildGeminiConversationHTML(title, messages) {
-    const safeTitle = escapeHtml(title || "Gemini Chat");
+  function buildHtml(title, messages) {
+    const safeTitle = escapeHtml(title || "Gemini-Chat");
     const parts = [`<h1>${safeTitle}</h1>`, '<div class="exportchat-conversation">'];
-
     messages.forEach((msg) => {
       const label = msg.role === "human" ? "User:" : "Gemini:";
-      parts.push(
-        `<p><strong>${label}</strong> ${escapeHtml(msg.text)}</p>`
-      );
+      const cleaned = cleanMessageTextForTextOutput(msg.text);
+      parts.push(`<p><strong>${label}</strong> ${escapeHtml(cleaned)}</p>`);
     });
-
     parts.push("</div>");
     return parts.join("");
   }
 
-  function buildGeminiConversationText(title, messages) {
-    const lines = [];
-    lines.push((title || "Gemini Chat").trim());
-    lines.push("");
-
-    messages.forEach((msg) => {
+  function buildText(title, messages) {
+    const lines = [(title || "Gemini-Chat").trim()];
+    messages.forEach((msg, index) => {
       const label = msg.role === "human" ? "User:" : "Gemini:";
-      lines.push(`${label} ${msg.text.trim()}`);
+      const cleaned = cleanMessageTextForTextOutput(msg.text);
+      // Blank line between each message for clearer separation
       lines.push("");
+      lines.push(`${label} ${cleaned}`);
     });
-
     return lines.join("\n").trimEnd();
   }
 
   window.ExportChat.getCurrentChat = function getCurrentChatGemini() {
-    const title = getGeminiTitle();
-    const root = findGeminiConversationRoot();
-    const messages = extractGeminiMessages(root);
-
-    const html = buildGeminiConversationHTML(title, messages);
-    const text = buildGeminiConversationText(title, messages);
-
+    const title = getFilename();
+    const messages = extractMessages();
     return {
       platform: "gemini",
       title,
-      html,
-      text,
+      html: buildHtml(title, messages),
+      text: buildText(title, messages),
       exportedAt: new Date().toISOString(),
     };
   };
 })();
-

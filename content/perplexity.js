@@ -11,25 +11,25 @@
   window.ExportChat.platformInitialized = true;
 
   function getPerplexityTitle() {
+    const mainTitle = document.querySelector("main h1, main [data-testid='conversation-title']");
+    if (mainTitle && mainTitle.textContent && mainTitle.textContent.trim()) {
+      return mainTitle.textContent.trim();
+    }
     const possibleSelectors = [
       'header h1',
       '[data-testid="conversation-title"]',
       '[data-test="conversation-title"]',
       'h1',
-      'main h1',
     ];
-
     for (const sel of possibleSelectors) {
       const el = document.querySelector(sel);
       if (el && el.textContent && el.textContent.trim().length > 0) {
         return el.textContent.trim();
       }
     }
-
     if (document.title && document.title.trim()) {
       return document.title.replace(/ - Perplexity.*$/i, "").trim();
     }
-
     return "perplexity-chat";
   }
 
