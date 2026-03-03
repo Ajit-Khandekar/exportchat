@@ -83,14 +83,25 @@ ExportChat is:
   filename is generated from first message text
 - Platform UI changes may require selector updates —
   open an issue if exports break after a platform update
+- **Perplexity sources** — source attribution links are
+  currently stripped during export. Only response text
+  is captured. Source citations are planned for v1.1.
 
 ---
 
 ## Roadmap
+
 - [ ] Chrome Web Store listing
+- [ ] Improved UX — floating download button (always visible
+      in viewport) + format selector in panel header,
+      with persistent format preference via chrome.storage
 - [ ] Firefox support
-- [ ] Copy to clipboard
+- [ ] Copy to clipboard (Markdown)
 - [ ] Timestamp toggle
+- [ ] Obsidian-ready export format
+- [ ] Perplexity source citations — include cited
+      sources as a clean list at the bottom of each
+      response block
 
 ---
 

@@ -34,6 +34,12 @@
     return "perplexity-chat";
   }
 
+  function stripCitationBadges(text) {
+    // Remove inline source citation badges like "amazon +5" or "source +1"
+    // that Perplexity injects at the end of response blocks.
+    return text.replace(/\s+[a-zA-Z]+(\s+[a-zA-Z]+)?\s+\+\d+/g, "").trim();
+  }
+
   function escapeHtml(str) {
     return (str || "")
       .replace(/&/g, "&amp;")
@@ -51,17 +57,25 @@
       ),
     ];
 
-    // AI response containers: deduplicate the immediate parent of every p.my-2.
-    // Each distinct parent is one complete Perplexity answer block.
-    const responseContainers = [];
+    // AI response containers: collect the grandparent of every p.my-2 element.
+    // Using grandparent (not immediate parent) ensures bullet-list items share
+    // a common ancestor (the list container), so the whole response collapses
+    // into one block instead of each bullet becoming a separate message.
+    const allAncestors = [];
     const seen = new Set();
     document.querySelectorAll("p.my-2").forEach((p) => {
-      const parent = p.parentElement;
-      if (parent && !seen.has(parent)) {
-        seen.add(parent);
-        responseContainers.push(parent);
+      const ancestor = p.parentElement?.parentElement || p.parentElement;
+      if (ancestor && !seen.has(ancestor)) {
+        seen.add(ancestor);
+        allAncestors.push(ancestor);
       }
     });
+
+    // Discard any container that is a descendant of another — keep outermost only.
+    // This collapses any remaining nesting into a single block per response.
+    const responseContainers = allAncestors.filter(
+      (el) => !allAncestors.some((other) => other !== el && other.contains(el))
+    );
 
     const messages = [];
     const maxLen = Math.max(userEls.length, responseContainers.length);
@@ -71,7 +85,7 @@
         if (text) messages.push({ role: "human", text });
       }
       if (responseContainers[i]) {
-        const text = responseContainers[i].innerText.trim();
+        const text = stripCitationBadges(responseContainers[i].innerText.trim());
         if (text) messages.push({ role: "assistant", text });
       }
     }
