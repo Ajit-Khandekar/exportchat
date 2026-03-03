@@ -51,7 +51,6 @@
       document.querySelector("chat-window") ||
       document.querySelector("infinite-scroller") ||
       document;
-    console.log("[ExportChat] active container:", container);
     return container;
   }
 
