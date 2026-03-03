@@ -1,3 +1,9 @@
+/**
+ * ExportChat - Export AI chats to MD, PDF, TXT, HTML, JSON
+ * Copyright (c) 2026 Ajit Khandekar (https://github.com/Ajit-Khandekar)
+ * A Solvize project - https://solvize.co
+ * Licensed under the MIT License
+ */
 // Plain text export for ExportChat
 
 (function initExportChatText() {

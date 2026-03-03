@@ -1,3 +1,9 @@
+/**
+ * ExportChat - Export AI chats to MD, PDF, TXT, HTML, JSON
+ * Copyright (c) 2026 Ajit Khandekar (https://github.com/Ajit-Khandekar)
+ * A Solvize project - https://solvize.co
+ * Licensed under the MIT License
+ */
 // Content script for Perplexity (perplexity.ai)
 
 (function initPerplexityExportChat() {
@@ -11,44 +17,21 @@
   window.ExportChat.platformInitialized = true;
 
   function getPerplexityTitle() {
-    const mainTitle = document.querySelector("main h1, main [data-testid='conversation-title']");
-    if (mainTitle && mainTitle.textContent && mainTitle.textContent.trim()) {
-      return mainTitle.textContent.trim();
+    // Try the page h1 first (Perplexity renders the query as an h1 on search pages).
+    const h1 = document.querySelector("h1");
+    if (h1 && h1.innerText && h1.innerText.trim()) {
+      return h1.innerText.trim();
     }
-    const possibleSelectors = [
-      'header h1',
-      '[data-testid="conversation-title"]',
-      '[data-test="conversation-title"]',
-      'h1',
-    ];
-    for (const sel of possibleSelectors) {
-      const el = document.querySelector(sel);
-      if (el && el.textContent && el.textContent.trim().length > 0) {
-        return el.textContent.trim();
-      }
+
+    // Derive from URL: /search/my-chat-topic-abc123 → "my chat topic"
+    // Perplexity appends a short random ID as the last hyphen-segment; drop it.
+    const searchSegment = window.location.pathname.split("/search/")[1];
+    if (searchSegment) {
+      const slug = searchSegment.split("-").slice(0, -1).join(" ").trim();
+      if (slug) return slug;
     }
-    if (document.title && document.title.trim()) {
-      return document.title.replace(/ - Perplexity.*$/i, "").trim();
-    }
+
     return "perplexity-chat";
-  }
-
-  function findPerplexityConversationRoot() {
-    const possibleSelectors = [
-      "main [data-testid='chat-scroll-container']",
-      "main [data-test='chat-scroll-container']",
-      "main [data-testid='conversation-view']",
-      "main [data-test='conversation-view']",
-      "main [role='main']",
-      "main",
-    ];
-
-    for (const sel of possibleSelectors) {
-      const el = document.querySelector(sel);
-      if (el) return el;
-    }
-
-    return null;
   }
 
   function escapeHtml(str) {
@@ -60,88 +43,71 @@
       .replace(/'/g, "&#39;");
   }
 
-  function normalizeWhitespace(str) {
-    return (str || "").replace(/\s+/g, " ").trim();
-  }
+  function extractPerplexityMessages() {
+    // User messages: <span> with all four confirmed classes.
+    const userEls = [
+      ...document.querySelectorAll(
+        "span.font-sans.text-base.break-words.select-text"
+      ),
+    ];
 
-  function extractPerplexityMessages(root) {
-    if (!root) return [];
-
-    const messages = [];
-
-    const candidates = root.querySelectorAll(
-      "[data-testid*='message'], [data-test*='message'], article, section"
-    );
-
-    candidates.forEach((node) => {
-      const text = normalizeWhitespace(node.textContent || "");
-      if (!text) return;
-
-      const roleHint =
-        node.getAttribute("data-author") ||
-        node.getAttribute("data-message-author-role") ||
-        node.getAttribute("data-testid") ||
-        node.getAttribute("data-test") ||
-        "";
-
-      const lower = roleHint.toLowerCase();
-      let role = "assistant";
-      if (lower.includes("user") || lower.includes("human") || lower.includes("question")) {
-        role = "human";
-      } else if (lower.includes("assistant") || lower.includes("answer") || lower.includes("perplexity")) {
-        role = "assistant";
+    // AI response containers: deduplicate the immediate parent of every p.my-2.
+    // Each distinct parent is one complete Perplexity answer block.
+    const responseContainers = [];
+    const seen = new Set();
+    document.querySelectorAll("p.my-2").forEach((p) => {
+      const parent = p.parentElement;
+      if (parent && !seen.has(parent)) {
+        seen.add(parent);
+        responseContainers.push(parent);
       }
-
-      messages.push({ role, text });
     });
 
+    const messages = [];
+    const maxLen = Math.max(userEls.length, responseContainers.length);
+    for (let i = 0; i < maxLen; i++) {
+      if (userEls[i]) {
+        const text = userEls[i].innerText.trim();
+        if (text) messages.push({ role: "human", text });
+      }
+      if (responseContainers[i]) {
+        const text = responseContainers[i].innerText.trim();
+        if (text) messages.push({ role: "assistant", text });
+      }
+    }
     return messages;
   }
 
-  function buildPerplexityConversationHTML(title, messages) {
+  function buildHtml(title, messages) {
     const safeTitle = escapeHtml(title || "Perplexity Chat");
     const parts = [`<h1>${safeTitle}</h1>`, '<div class="exportchat-conversation">'];
-
     messages.forEach((msg) => {
       const label = msg.role === "human" ? "User:" : "Perplexity:";
-      parts.push(
-        `<p><strong>${label}</strong> ${escapeHtml(msg.text)}</p>`
-      );
+      parts.push(`<p><strong>${label}</strong> ${escapeHtml(msg.text)}</p>`);
     });
-
     parts.push("</div>");
     return parts.join("");
   }
 
-  function buildPerplexityConversationText(title, messages) {
-    const lines = [];
-    lines.push((title || "Perplexity Chat").trim());
-    lines.push("");
-
+  function buildText(title, messages) {
+    const lines = [(title || "Perplexity Chat").trim()];
     messages.forEach((msg) => {
       const label = msg.role === "human" ? "User:" : "Perplexity:";
-      lines.push(`${label} ${msg.text.trim()}`);
       lines.push("");
+      lines.push(`${label} ${msg.text.trim()}`);
     });
-
     return lines.join("\n").trimEnd();
   }
 
   window.ExportChat.getCurrentChat = function getCurrentChatPerplexity() {
     const title = getPerplexityTitle();
-    const root = findPerplexityConversationRoot();
-    const messages = extractPerplexityMessages(root);
-
-    const html = buildPerplexityConversationHTML(title, messages);
-    const text = buildPerplexityConversationText(title, messages);
-
+    const messages = extractPerplexityMessages();
     return {
       platform: "perplexity",
       title,
-      html,
-      text,
+      html: buildHtml(title, messages),
+      text: buildText(title, messages),
       exportedAt: new Date().toISOString(),
     };
   };
 })();
-
