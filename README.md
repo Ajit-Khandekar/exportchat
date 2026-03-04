@@ -120,8 +120,5 @@ MIT License — see [LICENSE](LICENSE) file.
 
 ## Author
 
-Built by [Ajit Khandekar](https://github.com/Ajit-Khandekar)
-A [Solvize](https://solvize.co) project — Solutions. Optimized.
-
-
+Built by [Ajit Khandekar](https://www.linkedin.com/in/ajitkhandekar/)
 *Built using Cursor AI and Claude.*
