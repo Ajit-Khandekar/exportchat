@@ -18,30 +18,51 @@
   window.ExportChat.platform = "claude";
   window.ExportChat.platformInitialized = true;
 
+  // Generic labels Claude.ai shows regardless of which chat is open.
+  const GENERIC_TITLES = new Set(["claude", "claude.ai", "new conversation", "new chat"]);
+
+  function titleFromFirstUserMessage() {
+    const firstHuman = document.querySelector('div[class*="font-user-message"]');
+    if (!firstHuman) return null;
+    const raw = (firstHuman.innerText || "").trim();
+    if (!raw) return null;
+    return raw
+      .slice(0, 50)
+      .replace(/[\\/:*?"<>|]+/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
   /**
    * Get actual conversation title (for filename); avoid sidebar/generic labels.
    */
   function getClaudeTitle() {
-    const inMain = document.querySelector("main h1, main [data-testid='chat-title'], main [data-test='conversation-title']");
-    if (inMain && inMain.textContent && inMain.textContent.trim()) {
-      return inMain.textContent.trim();
-    }
-    const possibleSelectors = [
-      'header h1',
-      '[data-testid="chat-title"]',
-      '[data-test="conversation-title"]',
-      'h1',
-    ];
-    for (const sel of possibleSelectors) {
-      const el = document.querySelector(sel);
-      if (el && el.textContent && el.textContent.trim().length > 0) {
-        return el.textContent.trim();
+    // document.title is "Conversation title - Claude" for named chats.
+    if (document.title && document.title.trim()) {
+      const fromPageTitle = document.title.replace(/ - Claude.*$/i, "").trim();
+      if (fromPageTitle && !GENERIC_TITLES.has(fromPageTitle.toLowerCase())) {
+        return fromPageTitle;
       }
     }
-    if (document.title && document.title.trim()) {
-      return document.title.replace(/ - Claude.*$/i, "").trim();
+
+    // Try specific conversation title selectors only — not bare h1 which grabs the nav heading.
+    const titleSelectors = [
+      'main [data-testid="chat-title"]',
+      'main [data-test="conversation-title"]',
+      '[data-testid="chat-title"]',
+      '[data-test="conversation-title"]',
+    ];
+    for (const sel of titleSelectors) {
+      const el = document.querySelector(sel);
+      if (el && el.textContent && el.textContent.trim()) {
+        const t = el.textContent.trim();
+        if (!GENERIC_TITLES.has(t.toLowerCase())) {
+          return t;
+        }
+      }
     }
-    return "claude-chat";
+
+    return titleFromFirstUserMessage() || "Claude-Chat";
   }
 
   function findClaudeConversationRoot() {
