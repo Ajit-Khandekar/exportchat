@@ -116,6 +116,13 @@
       y += 3;
     });
 
+    // Attribution
+    if (y > 265) { doc.addPage(); y = 20; }
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(180, 180, 180);
+    doc.text('Saved via ExportChat \u00b7 exportchat.pages.dev', margin, y);
+
     var filename = sanitizeFilename(chat.title || 'ExportChat');
     doc.save(filename + '.pdf');
   }

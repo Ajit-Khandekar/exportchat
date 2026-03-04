@@ -76,7 +76,7 @@
     downloadFile(
       filename,
       "text/markdown;charset=utf-8",
-      headerLines.join("\n") + markdownBody
+      headerLines.join("\n") + markdownBody + "\n\n---\n*Saved via ExportChat · exportchat.pages.dev*"
     );
   };
 })();

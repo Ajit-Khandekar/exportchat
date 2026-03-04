@@ -41,6 +41,7 @@
       exportedAt: chat.exportedAt || new Date().toISOString(),
       html: chat.html || null,
       text: chat.text || null,
+      saved_via: "ExportChat \u00b7 exportchat.pages.dev",
     };
 
     const filename = sanitizeFilename(chat.title || "chat") + ".json";

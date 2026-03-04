@@ -58,7 +58,7 @@
     ];
 
     const filename = sanitizeFilename(chat.title || "chat") + ".txt";
-    downloadFile(filename, "text/plain;charset=utf-8", headerLines.join("\n") + text);
+    downloadFile(filename, "text/plain;charset=utf-8", headerLines.join("\n") + text + "\n\nSaved via ExportChat · exportchat.pages.dev");
   };
 })();
 
