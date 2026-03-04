@@ -35,20 +35,17 @@
 
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "exportchat-button";
+    button.className = "exportchat-btn";
     button.setAttribute("aria-haspopup", "true");
     button.setAttribute("aria-expanded", "false");
 
-    const icon = document.createElement("span");
-    icon.className = "exportchat-button-icon";
-    icon.textContent = "↓";
+    const img = document.createElement("img");
+    img.src = chrome.runtime.getURL("icons/icon48.png");
+    img.width = 32;
+    img.height = 32;
+    img.alt = "ExportChat";
 
-    const label = document.createElement("span");
-    label.className = "exportchat-button-label";
-    label.textContent = "ExportChat";
-
-    button.appendChild(icon);
-    button.appendChild(label);
+    button.appendChild(img);
 
     const dropdown = document.createElement("div");
     dropdown.className = "exportchat-dropdown hidden";
