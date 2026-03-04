@@ -23,10 +23,26 @@
   function titleFromFirstUserMessage() {
     const firstQuery = document.querySelector("user-query");
     if (!firstQuery) return null;
-    const textEl = firstQuery.querySelector(".query-text");
-    const raw = (textEl || firstQuery).innerText?.trim() || "";
+
+    // Use .query-text p (same as extractMessages) to exclude the
+    // cdk-visually-hidden "You said" accessibility span.
+    const paragraphs = [...firstQuery.querySelectorAll(".query-text p")]
+      .map((p) => p.innerText.trim())
+      .filter((t) => t.length > 0);
+
+    let raw = paragraphs.join(" ").trim();
+
+    // Fallback to .query-text innerText if no paragraphs found.
+    if (!raw) {
+      const textEl = firstQuery.querySelector(".query-text");
+      raw = textEl ? textEl.innerText.trim() : "";
+    }
+
     if (!raw) return null;
+
     return raw
+      .replace(/^you said[\s,:]*/i, "")
+      .trim()
       .slice(0, 50)
       .replace(/[\\/:*?"<>|]+/g, " ")
       .replace(/\s{2,}/g, " ")
@@ -34,7 +50,7 @@
   }
 
   function getFilename() {
-    let docTitle = document.title.trim().replace(/^you said\s*/i, "").trim();
+    let docTitle = document.title.trim().replace(/^you said[\s,:]*/i, "").trim();
     if (docTitle && !GENERIC_TITLES.has(docTitle.toLowerCase())) {
       return docTitle;
     }
