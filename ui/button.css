@@ -21,12 +21,12 @@
   margin: 0;
   border: none;
   border-radius: 50%;
-  background: #1f88dd;
+  background: transparent;
+  box-shadow: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .exportchat-btn:hover {
@@ -34,9 +34,11 @@
 }
 
 .exportchat-btn img {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   display: block;
+  border-radius: 50%;
+  overflow: hidden;
 }
 
 .exportchat-dropdown {

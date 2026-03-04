@@ -43,7 +43,8 @@
     img.src = chrome.runtime.getURL("icons/icon48.png");
     img.width = 32;
     img.height = 32;
-    img.alt = "ExportChat";
+    img.alt = "";
+    img.style.cssText = "width:40px;height:40px;display:block;pointer-events:none;";
 
     button.appendChild(img);
 
