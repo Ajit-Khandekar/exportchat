@@ -45,7 +45,7 @@
       "</head>" +
       "<body>" +
       chat.html +
-      '<footer style="text-align:center;padding:1rem;font-size:0.75rem;color:#999;">Saved via <a href="https://exportchat.pages.dev">ExportChat</a> \u00b7 exportchat.pages.dev</footer>' +
+      '<footer style="text-align:center;padding:1rem;font-size:0.75rem;color:#999;">Saved via <a href="https://exportchat.pages.dev">ExportChat</a></footer>' +
       "</body></html>";
 
     const filename = sanitizeFilename(chat.title || "chat") + ".html";

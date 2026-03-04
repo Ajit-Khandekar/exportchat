@@ -34,7 +34,7 @@
   }
 
   function getFilename() {
-    const docTitle = document.title.trim();
+    let docTitle = document.title.trim().replace(/^you said\s*/i, "").trim();
     if (docTitle && !GENERIC_TITLES.has(docTitle.toLowerCase())) {
       return docTitle;
     }
