@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ExportChat \u2013 Export AI Chats",
   "short_name": "ExportChat",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Export AI chat conversations to Markdown, PDF, HTML, TXT or JSON.",
   "permissions": [],
   "host_permissions": [

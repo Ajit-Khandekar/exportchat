@@ -41,14 +41,24 @@
     preEls.forEach(function(pre, i) {
       const code = pre.querySelector("code");
       const lang = (code ? code.className : "").replace(/.*\blanguage-(\S+).*/, "$1") || "";
-      const content = pre.innerText || pre.textContent || "";
+      // Read from <code> only to exclude any language label elements inside <pre>
+      const content = code ? (code.innerText || code.textContent || "") : (pre.innerText || pre.textContent || "");
       if (clonePres[i]) {
+        // Remove preceding sibling if it looks like an external language label
+        const prevSib = clonePres[i].previousElementSibling;
+        if (prevSib && lang && prevSib.textContent.trim().length < 60 &&
+            prevSib.textContent.trim().toLowerCase().includes(lang.toLowerCase())) {
+          prevSib.remove();
+        }
         clonePres[i].replaceWith("\n```" + lang + "\n" + content + "\n```\n");
       }
     });
     clone.querySelectorAll("br").forEach(function(br) { br.replaceWith("\n"); });
     clone.querySelectorAll("p").forEach(function(p) { p.after("\n"); });
-    return (clone.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
+    var text = (clone.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
+    // Safety net: remove language label still on the line just before its opening fence
+    text = text.replace(/^(\w+)\n(```\1)/gm, "$2");
+    return text;
   }
 
   function stripCitationBadges(text) {

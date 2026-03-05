@@ -68,47 +68,79 @@
     doc.setFontSize(10);
 
     var rawText = chat.text || '';
-    // Split BEFORE sanitizing — sanitizeForPDF collapses \s{2,} which includes \n,
-    // so splitting afterward would find nothing to split on.
-    var paragraphs = rawText.split('\n').map(function(p) { return sanitizeForPDF(p); });
+    // Parse lines — code block lines are kept as-is (preserves indentation).
+    // Non-code lines are sanitized normally.
+    var inCodeBlock = false;
+    var paragraphs = rawText.split('\n').map(function(line) {
+      var isFence = /^```/.test(line.trim());
+      if (isFence) {
+        inCodeBlock = !inCodeBlock;
+        return { text: line.trim(), isCode: true, isFence: true };
+      }
+      if (inCodeBlock) {
+        return { text: line, isCode: true, isFence: false };
+      }
+      return { text: sanitizeForPDF(line), isCode: false, isFence: false };
+    });
 
     // Do not repeat the title in the body content
     var titleLine = sanitizeForPDF(chat.title || 'Exported Chat');
     paragraphs = paragraphs.filter(function(para, idx) {
-      var trimmed = para.trim();
-      if (!trimmed) return false;
-      if (idx === 0 && trimmed === titleLine) return false;
+      var trimmed = para.text.trim();
+      if (!trimmed && !para.isCode) return false;
+      if (idx === 0 && !para.isCode && trimmed === titleLine) return false;
       return true;
     });
 
     paragraphs.forEach(function(para) {
-      para = para.trim();
-      if (!para) {
+      var line = para.isCode ? para.text : para.text.trim();
+
+      if (!line && !para.isCode) {
         y += 4;
         return;
       }
 
       if (y > 265) { doc.addPage(); y = 20; }
 
+      if (para.isCode) {
+        // Courier preserves monospace appearance and indentation
+        doc.setFont('courier', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(50, 50, 50);
+        if (line) {
+          var wrappedLines = doc.splitTextToSize(line, maxWidth);
+          wrappedLines.forEach(function(wl) {
+            if (y > 265) { doc.addPage(); y = 20; }
+            doc.text(wl, margin, y);
+            y += 4;
+          });
+        } else {
+          y += 2;
+        }
+        return;
+      }
+
+      // Non-code line — helvetica body style
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+
       // Require a space after the colon so only exact role labels are bolded
       // (e.g. "User: hello" matches, but "Lyrics:" or bare "User:" do not).
-      var isRoleLabel = /^(User|Gemini|Claude|ChatGPT|Perplexity):\s/.test(para);
+      var isRoleLabel = /^(User|Gemini|Claude|ChatGPT|Perplexity):\s/.test(line);
 
       if (isRoleLabel) {
         doc.setFont('helvetica', 'bold');
-      } else {
-        doc.setFont('helvetica', 'normal');
       }
 
       // Wrap long lines so nothing overflows the page width.
-      var wrappedLines = doc.splitTextToSize(para, maxWidth);
-      wrappedLines.forEach(function(line) {
+      var wrappedLines = doc.splitTextToSize(line, maxWidth);
+      wrappedLines.forEach(function(wl) {
         if (y > 265) { doc.addPage(); y = 20; }
-        doc.text(line, margin, y);
+        doc.text(wl, margin, y);
         y += 5;
       });
 
-      // Always reset to normal after rendering a role label block.
       if (isRoleLabel) {
         doc.setFont('helvetica', 'normal');
       }
