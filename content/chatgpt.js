@@ -61,6 +61,23 @@
     return (str || "").replace(/\s+/g, " ").trim();
   }
 
+  function extractTextFromElement(el) {
+    const clone = el.cloneNode(true);
+    const preEls = Array.from(el.querySelectorAll("pre"));
+    const clonePres = Array.from(clone.querySelectorAll("pre"));
+    preEls.forEach(function(pre, i) {
+      const code = pre.querySelector("code");
+      const lang = (code ? code.className : "").replace(/.*\blanguage-(\S+).*/, "$1") || "";
+      const content = pre.innerText || pre.textContent || "";
+      if (clonePres[i]) {
+        clonePres[i].replaceWith("\n```" + lang + "\n" + content + "\n```\n");
+      }
+    });
+    clone.querySelectorAll("br").forEach(function(br) { br.replaceWith("\n"); });
+    clone.querySelectorAll("p").forEach(function(p) { p.after("\n"); });
+    return (clone.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
   function extractChatGPTMessages(root) {
     if (!root) return [];
 
@@ -83,12 +100,12 @@
           if (lower.includes("user")) role = "human";
           else if (lower.includes("assistant")) role = "assistant";
 
-          const text = normalizeWhitespace(seg.textContent || "");
+          const text = extractTextFromElement(seg);
           if (!text) return;
           messages.push({ role, text });
         });
       } else {
-        const text = normalizeWhitespace(turn.textContent || "");
+        const text = extractTextFromElement(turn);
         if (!text) return;
         const isUserLike =
           turn.className.toLowerCase().includes("user") ||

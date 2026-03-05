@@ -90,7 +90,9 @@
     const geminiMessages = [...container.querySelectorAll("model-response")].map((el) => {
       const geminiEl = el.querySelector("div.markdown.markdown-main-panel");
       // Apply timestamp cleanup at extraction time so all export paths are covered.
-      const geminiText = geminiEl ? cleanMessageTextForTextOutput(geminiEl.innerText.trim()) : "";
+      const geminiText = geminiEl
+        ? extractTextFromElement(geminiEl).replace(/\d+:\d+\s*\/\s*\d+:\d+/g, "").trim()
+        : "";
       return geminiText;
     });
     const maxLen = Math.max(userMessages.length, geminiMessages.length);
@@ -119,6 +121,23 @@
       // Collapse multiple spaces left after removal
       .replace(/\s{2,}/g, " ")
       .trim();
+  }
+
+  function extractTextFromElement(el) {
+    const clone = el.cloneNode(true);
+    const preEls = Array.from(el.querySelectorAll("pre"));
+    const clonePres = Array.from(clone.querySelectorAll("pre"));
+    preEls.forEach(function(pre, i) {
+      const code = pre.querySelector("code");
+      const lang = (code ? code.className : "").replace(/.*\blanguage-(\S+).*/, "$1") || "";
+      const content = pre.innerText || pre.textContent || "";
+      if (clonePres[i]) {
+        clonePres[i].replaceWith("\n```" + lang + "\n" + content + "\n```\n");
+      }
+    });
+    clone.querySelectorAll("br").forEach(function(br) { br.replaceWith("\n"); });
+    clone.querySelectorAll("p").forEach(function(p) { p.after("\n"); });
+    return (clone.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
   }
 
   function buildHtml(title, messages) {

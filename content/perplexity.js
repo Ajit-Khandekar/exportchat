@@ -34,6 +34,23 @@
     return "perplexity-chat";
   }
 
+  function extractTextFromElement(el) {
+    const clone = el.cloneNode(true);
+    const preEls = Array.from(el.querySelectorAll("pre"));
+    const clonePres = Array.from(clone.querySelectorAll("pre"));
+    preEls.forEach(function(pre, i) {
+      const code = pre.querySelector("code");
+      const lang = (code ? code.className : "").replace(/.*\blanguage-(\S+).*/, "$1") || "";
+      const content = pre.innerText || pre.textContent || "";
+      if (clonePres[i]) {
+        clonePres[i].replaceWith("\n```" + lang + "\n" + content + "\n```\n");
+      }
+    });
+    clone.querySelectorAll("br").forEach(function(br) { br.replaceWith("\n"); });
+    clone.querySelectorAll("p").forEach(function(p) { p.after("\n"); });
+    return (clone.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
   function stripCitationBadges(text) {
     // Remove inline source citation badges like "amazon +5" or "source +1"
     // that Perplexity injects at the end of response blocks.
@@ -85,7 +102,7 @@
         if (text) messages.push({ role: "human", text });
       }
       if (responseContainers[i]) {
-        const text = stripCitationBadges(responseContainers[i].innerText.trim());
+        const text = stripCitationBadges(extractTextFromElement(responseContainers[i]));
         if (text) messages.push({ role: "assistant", text });
       }
     }
