@@ -6,6 +6,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.4] - 2026-03-12
+
+### Fixed
+- Removed two external URLs embedded in `libs/jspdf.min.js` (`pdfobject.min.js` CDN reference and `webpjs.appspot.com`) — these are only referenced by optional output modes ExportChat never uses, making the library fully self-contained
+
+---
+
 ## [1.0.3] - 2026-03-05
 
 ### Fixed
