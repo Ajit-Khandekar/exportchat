@@ -17,6 +17,45 @@
   window.ExportChat.platform = "gemini";
   window.ExportChat.platformInitialized = true;
 
+  const EXPORT_CHAT_SCROLL_SETTLE_MS = 1500;
+  const EXPORT_CHAT_SCROLL_STEP_PX = 800;
+  const EXPORT_CHAT_SCROLL_PAUSE_MS = 600;
+
+  /**
+   * Incrementally scroll upward so Gemini lazy-loads older virtualized messages.
+   */
+  async function scrollChatToTopForCapture() {
+    const scrollContainer =
+      document.querySelector("infinite-scroller") ||
+      document.querySelector("chat-window") ||
+      document.documentElement;
+
+    let previousTop = scrollContainer.scrollTop;
+    const startTop = previousTop;
+
+    while (scrollContainer.scrollTop > 0) {
+      const nextTop = Math.max(0, scrollContainer.scrollTop - EXPORT_CHAT_SCROLL_STEP_PX);
+      scrollContainer.scrollTop = nextTop;
+
+      await new Promise((resolve) => setTimeout(resolve, EXPORT_CHAT_SCROLL_PAUSE_MS));
+
+      const currentTop = scrollContainer.scrollTop;
+      // Stop if we can't move upward anymore.
+      if (currentTop >= previousTop) {
+        break;
+      }
+      previousTop = currentTop;
+    }
+
+    // If scrolling never started (already at top), still allow final settle below.
+    if (startTop === 0) {
+      scrollContainer.scrollTop = 0;
+    }
+
+    // Final settle for late-rendered content after reaching top.
+    await new Promise((resolve) => setTimeout(resolve, EXPORT_CHAT_SCROLL_SETTLE_MS));
+  }
+
   // Generic values Gemini always shows regardless of which chat is open.
   const GENERIC_TITLES = new Set(["google gemini", "gemini"]);
 
@@ -70,9 +109,27 @@
     return container;
   }
 
+  function normalizeLineBreaks(text) {
+    return (text || "")
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .replace(/\n{2,}/g, "\n")
+      .trim();
+  }
+
+  function cleanGeminiMessage(text) {
+    if (text == null) return "";
+    return normalizeLineBreaks(
+      String(text)
+        .replace(/^Gemini said\s*/i, "")
+        .replace(/Show thinking[\s\S]*?(?=\n\n|$)/gi, "")
+        .replace(/\d+:\d+\s*\/\s*\d+:\d+/g, "")
+        .trim()
+    );
+  }
+
   /**
-   * Extract messages using precise DOM selectors so we avoid "You said", "Gemini said",
-   * "Show thinking", and media timestamps (they live in other nodes).
+   * Extract messages using precise DOM selectors so we avoid sidebar/UI noise.
    */
   function extractMessages() {
     const container = findActiveConversationContainer();
@@ -87,18 +144,13 @@
         .trim();
       return cleanMessageTextForTextOutput(userText);
     });
-    const geminiMessages = [...container.querySelectorAll("model-response")].map((el) => {
-      const geminiEl = el.querySelector("div.markdown.markdown-main-panel");
-      // Apply timestamp cleanup at extraction time so all export paths are covered.
-      const geminiText = geminiEl
-        ? extractTextFromElement(geminiEl).replace(/\d+:\d+\s*\/\s*\d+:\d+/g, "").trim()
-        : "";
-      return geminiText;
-    });
+    const geminiMessages = [...container.querySelectorAll("model-response")].map((el) =>
+      extractGeminiResponseText(el)
+    );
     const maxLen = Math.max(userMessages.length, geminiMessages.length);
     const messages = [];
     for (let i = 0; i < maxLen; i++) {
-      if (userMessages[i]) messages.push({ role: "human", text: userMessages[i] });
+      if (userMessages[i]) messages.push({ role: "user", text: userMessages[i] });
       if (geminiMessages[i]) messages.push({ role: "assistant", text: geminiMessages[i] });
     }
     return messages;
@@ -115,46 +167,49 @@
 
   function cleanMessageTextForTextOutput(text) {
     if (text == null) return "";
+    // Preserve line structure (especially fenced code blocks).
     return String(text)
-      // Remove media-style timestamps like "0:00 / 0:30"
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
       .replace(/\d+:\d+\s*\/\s*\d+:\d+/g, "")
-      // Collapse multiple spaces left after removal
-      .replace(/\s{2,}/g, " ")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
       .trim();
   }
 
-  function extractTextFromElement(el) {
-    const clone = el.cloneNode(true);
-    const preEls = Array.from(el.querySelectorAll("pre"));
-    const clonePres = Array.from(clone.querySelectorAll("pre"));
-    preEls.forEach(function(pre, i) {
-      const code = pre.querySelector("code");
-      const lang = (code ? code.className : "").replace(/.*\blanguage-(\S+).*/, "$1") || "";
-      // Read from <code> only to exclude any language label elements inside <pre>
-      const content = code ? (code.innerText || code.textContent || "") : (pre.innerText || pre.textContent || "");
-      if (clonePres[i]) {
-        // Remove preceding sibling if it looks like an external language label
-        const prevSib = clonePres[i].previousElementSibling;
-        if (prevSib && lang && prevSib.textContent.trim().length < 60 &&
-            prevSib.textContent.trim().toLowerCase().includes(lang.toLowerCase())) {
-          prevSib.remove();
-        }
-        clonePres[i].replaceWith("\n```" + lang + "\n" + content + "\n```\n");
-      }
+  function extractGeminiResponseText(modelResponseEl) {
+    if (!modelResponseEl) return "";
+
+    // Clone first so live page DOM stays untouched.
+    const clone = modelResponseEl.cloneNode(true);
+
+    // Replace code-like blocks with fenced placeholders before innerText flattening.
+    const codeLikeNodes = Array.from(
+      clone.querySelectorAll(".code-block, .code-container, pre, code")
+    );
+
+    codeLikeNodes.forEach((node) => {
+      const raw = (node.textContent || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const isMultiline = raw.includes("\n");
+      if (!isMultiline || !raw.trim()) return;
+
+      const classAttr = node.getAttribute("class") || "";
+      const langMatch = classAttr.match(/\blanguage-([a-z0-9_+-]+)/i);
+      const language = langMatch ? langMatch[1] : "";
+      const fenced = "\n```" + language + "\n" + raw.trimEnd() + "\n```\n";
+
+      node.replaceWith(document.createTextNode(fenced));
     });
-    clone.querySelectorAll("br").forEach(function(br) { br.replaceWith("\n"); });
-    clone.querySelectorAll("p").forEach(function(p) { p.after("\n"); });
-    var text = (clone.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
-    // Safety net: remove language label still on the line just before its opening fence
-    text = text.replace(/^(\w+)\n(```\1)/gm, "$2");
-    return text;
+
+    const flattened = clone.innerText || "";
+    return cleanGeminiMessage(flattened);
   }
 
   function buildHtml(title, messages) {
     const safeTitle = escapeHtml(title || "Gemini-Chat");
     const parts = [`<h1>${safeTitle}</h1>`, '<div class="exportchat-conversation">'];
     messages.forEach((msg) => {
-      const label = msg.role === "human" ? "User:" : "Gemini:";
+      const label = (msg.role === "user" || msg.role === "human") ? "User:" : "Gemini:";
       const cleaned = cleanMessageTextForTextOutput(msg.text);
       parts.push(`<p><strong>${label}</strong> ${escapeHtml(cleaned)}</p>`);
     });
@@ -165,7 +220,7 @@
   function buildText(title, messages) {
     const lines = [(title || "Gemini-Chat").trim()];
     messages.forEach((msg, index) => {
-      const label = msg.role === "human" ? "User:" : "Gemini:";
+      const label = (msg.role === "user" || msg.role === "human") ? "User:" : "Gemini:";
       const cleaned = cleanMessageTextForTextOutput(msg.text);
       // Blank line between each message for clearer separation
       lines.push("");
@@ -174,12 +229,35 @@
     return lines.join("\n").trimEnd();
   }
 
-  window.ExportChat.getCurrentChat = function getCurrentChatGemini() {
+  function autoScrollToBottom() {
+    return new Promise((resolve) => {
+      let lastHeight = 0;
+      let unchangedCount = 0;
+      const interval = setInterval(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+        const currentHeight = document.body.scrollHeight;
+        if (currentHeight === lastHeight) {
+          unchangedCount++;
+          if (unchangedCount >= 3) {
+            clearInterval(interval);
+            resolve();
+          }
+        } else {
+          unchangedCount = 0;
+        }
+        lastHeight = currentHeight;
+      }, 600);
+    });
+  }
+
+  window.ExportChat.getCurrentChat = async function getCurrentChatGemini() {
+    await autoScrollToBottom();
     const title = getFilename();
     const messages = extractMessages();
     return {
       platform: "gemini",
       title,
+      messages,
       html: buildHtml(title, messages),
       text: buildText(title, messages),
       exportedAt: new Date().toISOString(),

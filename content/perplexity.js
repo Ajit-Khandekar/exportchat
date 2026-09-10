@@ -16,6 +16,30 @@
   window.ExportChat.platform = "perplexity";
   window.ExportChat.platformInitialized = true;
 
+  const EXPORT_CHAT_SCROLL_SETTLE_MS = 1500;
+
+  /**
+   * Programmatically scroll the chat area to the top so virtualized messages mount,
+   * then wait EXPORT_CHAT_SCROLL_SETTLE_MS before scraping.
+   */
+  function scrollChatToTopForCapture() {
+    window.scrollTo(0, 0);
+    const root =
+      document.querySelector("main") ||
+      document.querySelector("[data-testid='thread']") ||
+      document.body;
+    if (root) {
+      root.scrollTop = 0;
+      let el = root;
+      while (el && el !== document.documentElement) {
+        if (el.scrollHeight > el.clientHeight) {
+          el.scrollTop = 0;
+        }
+        el = el.parentElement;
+      }
+    }
+  }
+
   function getPerplexityTitle() {
     // Try the page h1 first (Perplexity renders the query as an h1 on search pages).
     const h1 = document.querySelector("h1");
@@ -109,7 +133,7 @@
     for (let i = 0; i < maxLen; i++) {
       if (userEls[i]) {
         const text = userEls[i].innerText.trim();
-        if (text) messages.push({ role: "human", text });
+        if (text) messages.push({ role: "user", text });
       }
       if (responseContainers[i]) {
         const text = stripCitationBadges(extractTextFromElement(responseContainers[i]));
@@ -123,7 +147,7 @@
     const safeTitle = escapeHtml(title || "Perplexity Chat");
     const parts = [`<h1>${safeTitle}</h1>`, '<div class="exportchat-conversation">'];
     messages.forEach((msg) => {
-      const label = msg.role === "human" ? "User:" : "Perplexity:";
+      const label = (msg.role === "user" || msg.role === "human") ? "User:" : "Perplexity:";
       parts.push(`<p><strong>${label}</strong> ${escapeHtml(msg.text)}</p>`);
     });
     parts.push("</div>");
@@ -133,19 +157,42 @@
   function buildText(title, messages) {
     const lines = [(title || "Perplexity Chat").trim()];
     messages.forEach((msg) => {
-      const label = msg.role === "human" ? "User:" : "Perplexity:";
+      const label = (msg.role === "user" || msg.role === "human") ? "User:" : "Perplexity:";
       lines.push("");
       lines.push(`${label} ${msg.text.trim()}`);
     });
     return lines.join("\n").trimEnd();
   }
 
-  window.ExportChat.getCurrentChat = function getCurrentChatPerplexity() {
+  function autoScrollToBottom() {
+    return new Promise((resolve) => {
+      let lastHeight = 0;
+      let unchangedCount = 0;
+      const interval = setInterval(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+        const currentHeight = document.body.scrollHeight;
+        if (currentHeight === lastHeight) {
+          unchangedCount++;
+          if (unchangedCount >= 3) {
+            clearInterval(interval);
+            resolve();
+          }
+        } else {
+          unchangedCount = 0;
+        }
+        lastHeight = currentHeight;
+      }, 600);
+    });
+  }
+
+  window.ExportChat.getCurrentChat = async function getCurrentChatPerplexity() {
+    await autoScrollToBottom();
     const title = getPerplexityTitle();
     const messages = extractPerplexityMessages();
     return {
       platform: "perplexity",
       title,
+      messages,
       html: buildHtml(title, messages),
       text: buildText(title, messages),
       exportedAt: new Date().toISOString(),

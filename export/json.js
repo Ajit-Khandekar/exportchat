@@ -35,13 +35,19 @@
       return;
     }
 
+    const formattedMessages = Array.isArray(chat.messages)
+      ? chat.messages.map((msg) => ({
+          role: (msg.role === "human" || msg.role === "user") ? "user" : "assistant",
+          content: msg.text || msg.content || ""
+        }))
+      : [];
+
     const payload = {
       title: chat.title || "AI Chat",
       platform: chat.platform || "unknown",
       exportedAt: chat.exportedAt || new Date().toISOString(),
-      html: chat.html || null,
-      text: chat.text || null,
       saved_via: "ExportChat \u00b7 exportchat.pages.dev",
+      messages: formattedMessages
     };
 
     const filename = sanitizeFilename(chat.title || "chat") + ".json";

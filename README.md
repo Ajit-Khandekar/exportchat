@@ -101,6 +101,15 @@ Open an issue or submit a PR - contributions welcome.
 
 ---
 
+## Known Bugs
+
+- **Bug**: Gemini export only captures user messages — all Gemini/assistant responses are missing from the export.
+- **Affected formats**: All (MD, PDF, TXT, HTML, JSON)
+- **Root cause (suspected)**: `model-response` DOM selectors in `content/gemini.js` no longer match Gemini's current page structure.
+- **Status**: Under investigation — fix targeted for v1.1
+
+---
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) file.

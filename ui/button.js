@@ -119,35 +119,35 @@
         return;
       }
 
-      const chat = window.ExportChat.getCurrentChat();
-      if (!chat) {
-        closeDropdown();
-        return;
-      }
-
-      try {
-        switch (format) {
-          case "markdown":
-            window.ExportChat.exportAsMarkdown(chat);
-            break;
-          case "pdf":
-            window.ExportChat.exportAsPDF(chat);
-            break;
-          case "text":
-            window.ExportChat.exportAsText(chat);
-            break;
-          case "html":
-            window.ExportChat.exportAsHTML(chat);
-            break;
-          case "json":
-            window.ExportChat.exportAsJSON(chat);
-            break;
+      window.ExportChat.getCurrentChat().then(function(chat) {
+        if (!chat) {
+          closeDropdown();
+          return;
         }
-      } catch (e) {
-        console.error("[ExportChat] Export failed:", e);
-      }
-
-      closeDropdown();
+        try {
+          switch (format) {
+            case "markdown":
+              window.ExportChat.exportAsMarkdown(chat);
+              break;
+            case "pdf":
+              window.ExportChat.exportAsPDF(chat);
+              break;
+            case "text":
+              window.ExportChat.exportAsText(chat);
+              break;
+            case "html":
+              window.ExportChat.exportAsHTML(chat);
+              break;
+            case "json":
+              window.ExportChat.exportAsJSON(chat);
+              break;
+          }
+        } catch (e) {
+          console.error("[ExportChat] Export failed:", e);
+        }
+        closeDropdown();
+      });
+      return;
     });
 
     document.addEventListener(

@@ -16,6 +16,27 @@
   window.ExportChat.platform = "chatgpt";
   window.ExportChat.platformInitialized = true;
 
+  const EXPORT_CHAT_SCROLL_SETTLE_MS = 1500;
+
+  /**
+   * Programmatically scroll the chat area to the top so virtualized messages mount,
+   * then wait EXPORT_CHAT_SCROLL_SETTLE_MS before scraping.
+   */
+  function scrollChatToTopForCapture() {
+    window.scrollTo(0, 0);
+    const root = findChatGPTConversationRoot();
+    if (root) {
+      root.scrollTop = 0;
+      let el = root;
+      while (el && el !== document.documentElement) {
+        if (el.scrollHeight > el.clientHeight) {
+          el.scrollTop = 0;
+        }
+        el = el.parentElement;
+      }
+    }
+  }
+
   function getChatGPTTitle() {
     // Prefer active conversation in sidebar (actual chat title), then main/header
     const sidebarActive = document.querySelector('nav [role="treeitem"][aria-current="page"] span, nav [data-testid="conversation-title"]');
@@ -107,7 +128,7 @@
             "";
           const lower = roleAttr.toLowerCase();
           let role = "assistant";
-          if (lower.includes("user")) role = "human";
+          if (lower.includes("user")) role = "user";
           else if (lower.includes("assistant")) role = "assistant";
 
           const text = extractTextFromElement(seg);
@@ -121,7 +142,7 @@
           turn.className.toLowerCase().includes("user") ||
           turn.getAttribute("data-testid")?.toLowerCase().includes("user") ||
           turn.getAttribute("data-test")?.toLowerCase().includes("user");
-        const role = isUserLike ? "human" : "assistant";
+        const role = isUserLike ? "user" : "assistant";
         messages.push({ role, text });
       }
     });
@@ -134,7 +155,7 @@
     const parts = [`<h1>${safeTitle}</h1>`, '<div class="exportchat-conversation">'];
 
     messages.forEach((msg) => {
-      const label = msg.role === "human" ? "User:" : "ChatGPT:";
+      const label = (msg.role === "user" || msg.role === "human") ? "User:" : "ChatGPT:";
       parts.push(
         `<p><strong>${label}</strong> ${escapeHtml(msg.text)}</p>`
       );
@@ -150,7 +171,7 @@
     lines.push("");
 
     messages.forEach((msg) => {
-      const label = msg.role === "human" ? "User:" : "ChatGPT:";
+      const label = (msg.role === "user" || msg.role === "human") ? "User:" : "ChatGPT:";
       lines.push(`${label} ${msg.text.trim()}`);
       lines.push("");
     });
@@ -158,7 +179,29 @@
     return lines.join("\n").trimEnd();
   }
 
-  window.ExportChat.getCurrentChat = function getCurrentChatChatGPT() {
+  function autoScrollToBottom() {
+    return new Promise((resolve) => {
+      let lastHeight = 0;
+      let unchangedCount = 0;
+      const interval = setInterval(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+        const currentHeight = document.body.scrollHeight;
+        if (currentHeight === lastHeight) {
+          unchangedCount++;
+          if (unchangedCount >= 3) {
+            clearInterval(interval);
+            resolve();
+          }
+        } else {
+          unchangedCount = 0;
+        }
+        lastHeight = currentHeight;
+      }, 600);
+    });
+  }
+
+  window.ExportChat.getCurrentChat = async function getCurrentChatChatGPT() {
+    await autoScrollToBottom();
     const title = getChatGPTTitle();
     const root = findChatGPTConversationRoot();
     const messages = extractChatGPTMessages(root);
@@ -169,6 +212,7 @@
     return {
       platform: "chatgpt",
       title,
+      messages,
       html,
       text,
       exportedAt: new Date().toISOString(),
