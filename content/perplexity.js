@@ -183,7 +183,7 @@
     const container = findScrollableContainer();
     let previousTop = -1;
     let stuckCount = 0;
-    const maxSteps = 40;
+    const maxSteps = 30;
 
     for (let i = 0; i < maxSteps; i++) {
       const currentScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
@@ -193,28 +193,28 @@
         window.scrollTo(0, 0);
         container.dispatchEvent(new Event("scroll", { bubbles: true }));
         window.dispatchEvent(new Event("scroll", { bubbles: true }));
-        await new Promise((resolve) => setTimeout(resolve, 400));
+        await new Promise((resolve) => setTimeout(resolve, 300));
         if (container.scrollTop === 0) {
           break;
         }
       }
 
       if (container !== document.documentElement && container.scrollTop !== undefined) {
-        container.scrollTop = Math.max(0, container.scrollTop - 1000);
+        container.scrollTop = Math.max(0, container.scrollTop - 2000);
       }
-      window.scrollBy(0, -1000);
+      window.scrollBy(0, -2000);
 
       try {
         container.dispatchEvent(new Event("scroll", { bubbles: true }));
         window.dispatchEvent(new Event("scroll", { bubbles: true }));
       } catch (e) {}
 
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      await new Promise((resolve) => setTimeout(resolve, 250));
 
       const newScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
       if (newScrollTop === previousTop) {
         stuckCount++;
-        if (stuckCount >= 3) break;
+        if (stuckCount >= 2) break;
       } else {
         stuckCount = 0;
       }
@@ -230,7 +230,7 @@
       window.dispatchEvent(new Event("scroll", { bubbles: true }));
     } catch (e) {}
 
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await new Promise((resolve) => setTimeout(resolve, 400));
   }
 
   window.ExportChat.scrollChatToTop = scrollChatToTopForCapture;

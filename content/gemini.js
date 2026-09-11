@@ -17,9 +17,9 @@
   window.ExportChat.platform = "gemini";
   window.ExportChat.platformInitialized = true;
 
-  const EXPORT_CHAT_SCROLL_SETTLE_MS = 1500;
-  const EXPORT_CHAT_SCROLL_STEP_PX = 800;
-  const EXPORT_CHAT_SCROLL_PAUSE_MS = 600;
+  const EXPORT_CHAT_SCROLL_SETTLE_MS = 600;
+  const EXPORT_CHAT_SCROLL_STEP_PX = 2000;
+  const EXPORT_CHAT_SCROLL_PAUSE_MS = 250;
 
   function findScrollableContainer() {
     const sampleMsg = document.querySelector("user-query, ms-user-query, model-response, ms-model-response, ms-chat-turn");
@@ -47,7 +47,7 @@
     const container = findScrollableContainer();
     let previousTop = -1;
     let stuckCount = 0;
-    const maxSteps = 40;
+    const maxSteps = 30;
 
     for (let i = 0; i < maxSteps; i++) {
       const currentScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
@@ -57,7 +57,7 @@
         window.scrollTo(0, 0);
         container.dispatchEvent(new Event("scroll", { bubbles: true }));
         window.dispatchEvent(new Event("scroll", { bubbles: true }));
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 300));
         if (container.scrollTop === 0) {
           break;
         }
@@ -78,7 +78,7 @@
       const newScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
       if (newScrollTop === previousTop) {
         stuckCount++;
-        if (stuckCount >= 3) break;
+        if (stuckCount >= 2) break;
       } else {
         stuckCount = 0;
       }
