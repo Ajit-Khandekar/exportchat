@@ -111,4 +111,4 @@ MIT License - see [LICENSE](LICENSE) file.
 
 Built by [Ajit Khandekar](https://www.linkedin.com/in/ajitkhandekar/)
 
-*Built using Cursor AI and Claude Code.*
+

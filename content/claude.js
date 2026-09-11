@@ -256,20 +256,23 @@
     const container = findScrollableContainer();
     let previousMessageCount = 0;
     let unchangedCount = 0;
-    const maxIterations = 20;
+    const maxIterations = 25;
 
     for (let i = 0; i < maxIterations; i++) {
-      container.scrollTop = 0;
-      window.scrollTo(0, 0);
+      const isAlreadyAtTop = (container.scrollTop === 0 || window.scrollY === 0);
 
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      container.scrollTop = Math.max(0, container.scrollTop - 800);
+      window.scrollBy(0, -800);
+
+      container.dispatchEvent(new Event("scroll", { bubbles: true }));
+      window.dispatchEvent(new Event("scroll", { bubbles: true }));
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const currentMessageCount = getMessageCount();
-      if (currentMessageCount === previousMessageCount && (container.scrollTop === 0 || window.scrollY === 0)) {
+      if (isAlreadyAtTop && currentMessageCount === previousMessageCount) {
         unchangedCount++;
-        if (unchangedCount >= 2) {
-          break;
-        }
+        if (unchangedCount >= 2) break;
       } else {
         unchangedCount = 0;
       }
@@ -278,8 +281,12 @@
 
     container.scrollTop = 0;
     window.scrollTo(0, 0);
+    container.dispatchEvent(new Event("scroll", { bubbles: true }));
+    window.dispatchEvent(new Event("scroll", { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 600));
   }
+
+  window.ExportChat.scrollChatToTop = scrollChatToTopForCapture;
 
   window.ExportChat.getCurrentChat = async function getCurrentChatClaude() {
     await scrollChatToTopForCapture();
@@ -299,4 +306,5 @@
     };
   };
 })();
+
 

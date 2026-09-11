@@ -33,28 +33,34 @@
     let previousTop = scrollContainer.scrollTop;
     const startTop = previousTop;
 
-    while (scrollContainer.scrollTop > 0) {
+    while (scrollContainer.scrollTop > 0 || window.scrollY > 0) {
       const nextTop = Math.max(0, scrollContainer.scrollTop - EXPORT_CHAT_SCROLL_STEP_PX);
       scrollContainer.scrollTop = nextTop;
+      window.scrollBy(0, -EXPORT_CHAT_SCROLL_STEP_PX);
+
+      scrollContainer.dispatchEvent(new Event("scroll", { bubbles: true }));
+      window.dispatchEvent(new Event("scroll", { bubbles: true }));
 
       await new Promise((resolve) => setTimeout(resolve, EXPORT_CHAT_SCROLL_PAUSE_MS));
 
       const currentTop = scrollContainer.scrollTop;
-      // Stop if we can't move upward anymore.
-      if (currentTop >= previousTop) {
+      if (currentTop >= previousTop && scrollContainer.scrollTop === 0) {
         break;
       }
       previousTop = currentTop;
     }
 
-    // If scrolling never started (already at top), still allow final settle below.
     if (startTop === 0) {
       scrollContainer.scrollTop = 0;
+      window.scrollTo(0, 0);
     }
+    scrollContainer.dispatchEvent(new Event("scroll", { bubbles: true }));
+    window.dispatchEvent(new Event("scroll", { bubbles: true }));
 
-    // Final settle for late-rendered content after reaching top.
     await new Promise((resolve) => setTimeout(resolve, EXPORT_CHAT_SCROLL_SETTLE_MS));
   }
+
+  window.ExportChat.scrollChatToTop = scrollChatToTopForCapture;
 
   // Generic values Gemini always shows regardless of which chat is open.
   const GENERIC_TITLES = new Set(["google gemini", "gemini"]);

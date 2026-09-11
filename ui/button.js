@@ -33,6 +33,13 @@
     container.id = "exportchat-floating-root";
     container.className = "exportchat-floating-container";
 
+    const scrollBtn = document.createElement("button");
+    scrollBtn.type = "button";
+    scrollBtn.className = "exportchat-scroll-btn";
+    scrollBtn.title = "Scroll to top of chat";
+    scrollBtn.setAttribute("aria-label", "Scroll to top of chat");
+    scrollBtn.innerHTML = "&#8593;";
+
     const button = document.createElement("button");
     button.type = "button";
     button.className = "exportchat-btn";
@@ -73,10 +80,33 @@
     tooltip.className = "exportchat-tooltip";
     tooltip.textContent = "Export this chat";
 
+    container.appendChild(scrollBtn);
     container.appendChild(button);
     container.appendChild(dropdown);
     container.appendChild(tooltip);
     document.documentElement.appendChild(container);
+
+    scrollBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closeDropdown();
+      if (window.ExportChat && typeof window.ExportChat.scrollChatToTop === "function") {
+        window.ExportChat.scrollChatToTop();
+      } else {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    });
+
+    scrollBtn.addEventListener("mouseenter", () => {
+      if (dropdown.classList.contains("hidden")) {
+        tooltip.textContent = "Scroll to top of chat";
+        tooltip.classList.add("visible");
+      }
+    });
+
+    scrollBtn.addEventListener("mouseleave", () => {
+      tooltip.textContent = "Export this chat";
+      tooltip.classList.remove("visible");
+    });
 
     function closeDropdown() {
       dropdown.classList.add("hidden");
@@ -101,6 +131,7 @@
 
     button.addEventListener("mouseenter", () => {
       if (dropdown.classList.contains("hidden")) {
+        tooltip.textContent = "Export this chat";
         tooltip.classList.add("visible");
       }
     });

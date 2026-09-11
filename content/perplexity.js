@@ -18,28 +18,6 @@
 
   const EXPORT_CHAT_SCROLL_SETTLE_MS = 1500;
 
-  /**
-   * Programmatically scroll the chat area to the top so virtualized messages mount,
-   * then wait EXPORT_CHAT_SCROLL_SETTLE_MS before scraping.
-   */
-  function scrollChatToTopForCapture() {
-    window.scrollTo(0, 0);
-    const root =
-      document.querySelector("main") ||
-      document.querySelector("[data-testid='thread']") ||
-      document.body;
-    if (root) {
-      root.scrollTop = 0;
-      let el = root;
-      while (el && el !== document.documentElement) {
-        if (el.scrollHeight > el.clientHeight) {
-          el.scrollTop = 0;
-        }
-        el = el.parentElement;
-      }
-    }
-  }
-
   function getPerplexityTitle() {
     // Try the page h1 first (Perplexity renders the query as an h1 on search pages).
     const h1 = document.querySelector("h1");
@@ -191,14 +169,22 @@
     while ((root.scrollTop > 0 || window.scrollY > 0) && iterations < maxIterations) {
       root.scrollTop = Math.max(0, root.scrollTop - 1000);
       window.scrollBy(0, -1000);
+
+      root.dispatchEvent(new Event("scroll", { bubbles: true }));
+      window.dispatchEvent(new Event("scroll", { bubbles: true }));
+
       await new Promise((resolve) => setTimeout(resolve, 400));
       iterations++;
     }
 
     root.scrollTop = 0;
     window.scrollTo(0, 0);
+    root.dispatchEvent(new Event("scroll", { bubbles: true }));
+    window.dispatchEvent(new Event("scroll", { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 800));
   }
+
+  window.ExportChat.scrollChatToTop = scrollChatToTopForCapture;
 
   window.ExportChat.getCurrentChat = async function getCurrentChatPerplexity() {
     await scrollChatToTopForCapture();

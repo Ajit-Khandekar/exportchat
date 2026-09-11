@@ -8,9 +8,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Loading indicator feedback on floating export button (`ui/button.js`) during asynchronous chat capture (`"Loading chat history..."`).
+- Minimal floating **Scroll to Top** button (`↑`) attached to the ExportChat UI widget (`ui/button.js`, `ui/button.css`) for instant manual navigation on long threads.
 - Extracted and appended source citation links (`[1]`, `[2]`) in Perplexity exports under a clean `Sources:` section.
 
 ### Fixed
+- Fixed auto-scroll capture for long virtualized chats across Claude, Gemini, ChatGPT, and Perplexity by dispatching synthetic `scroll` DOM events (`new Event("scroll", { bubbles: true })`) during step-by-step upward scrolling to trigger SPA (React/Vue/Astro) lazy-loading listeners.
 - Gemini assistant response extraction across Shadow DOM boundaries — added deep Shadow DOM traversal (`deepShadowAll`) and multi-strategy custom element selectors to ensure all assistant responses are included in exports.
 - Fixed JSON export schema (`exportAsJSON`) — now outputs a clean, structured array of `{ role, content }` objects under `messages` instead of flat string dumps.
 
