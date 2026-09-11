@@ -4,6 +4,15 @@ All notable changes to ExportChat are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-09-11
+
+### Fixed
+- Gemini assistant response extraction across Shadow DOM boundaries — added deep Shadow DOM traversal (`deepShadowAll`) and multi-strategy custom element selectors (`ms-chat-turn`, `ms-model-response`, `ms-user-query`) to ensure all assistant responses are included in exports
+
+### Changed
+- Structured JSON export schema (`exportAsJSON`) — output now formats chat history as a clean, machine-readable array of `{ role, content }` objects under `messages` instead of flat `html` / `text` root string dumps
+- Standardized user message role to `"user"` across ChatGPT, Claude, Gemini, and Perplexity content scripts
+
 ---
 
 ## [1.0.4] - 2026-03-12
