@@ -54,7 +54,10 @@
     let markdownBody = "";
 
     if (chat.html) {
-      markdownBody = turndownService.turndown(chat.html);
+      let body = turndownService.turndown(chat.html);
+      // Strip leading duplicate # H1 heading if present
+      body = body.replace(/^#\s+[^\n]+\n+/, "");
+      markdownBody = body;
     } else if (chat.text) {
       markdownBody = chat.text;
     } else {

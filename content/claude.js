@@ -119,15 +119,18 @@
 
   function extractTextFromElement(el) {
     const clone = el.cloneNode(true);
+    // Strip tool call, search status badges, and collapsible thinking blocks
+    clone.querySelectorAll("button, [data-testid*='tool'], div[class*='tool'], div[class*='searched'], [aria-label*='Search'], [data-testid*='thinking']").forEach(function(b) {
+      b.remove();
+    });
+
     const preEls = Array.from(el.querySelectorAll("pre"));
     const clonePres = Array.from(clone.querySelectorAll("pre"));
     preEls.forEach(function(pre, i) {
       const code = pre.querySelector("code");
       const lang = (code ? code.className : "").replace(/.*\blanguage-(\S+).*/, "$1") || "";
-      // Read from <code> only to exclude any language label elements inside <pre>
       const content = code ? (code.innerText || code.textContent || "") : (pre.innerText || pre.textContent || "");
       if (clonePres[i]) {
-        // Remove preceding sibling if it looks like an external language label
         const prevSib = clonePres[i].previousElementSibling;
         if (prevSib && lang && prevSib.textContent.trim().length < 60 &&
             prevSib.textContent.trim().toLowerCase().includes(lang.toLowerCase())) {
@@ -139,17 +142,22 @@
     clone.querySelectorAll("br").forEach(function(br) { br.replaceWith("\n"); });
     clone.querySelectorAll("p").forEach(function(p) { p.after("\n"); });
     var text = (clone.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
-    // Safety net: remove language label still on the line just before its opening fence
     text = text.replace(/^(\w+)\n(```\1)/gm, "$2");
+    // Strip Private Use Area control symbols (e.g. \uE02A) injected by search status indicators
+    text = text.replace(/[\uE000-\uF8FF]/g, "").replace(/\uE02A/g, "").trim();
     return text;
   }
 
   function extractClaudeMessages() {
     const humanEls = Array.from(
-      document.querySelectorAll('div[class*="font-user-message"]')
+      document.querySelectorAll(
+        'div[class*="font-user-message"], [data-testid="user-message"], div[class*="user-message"], div.font-user-message, div[class*="UserMessage"]'
+      )
     );
     const claudeEls = Array.from(
-      document.querySelectorAll('div[class*="font-claude"]')
+      document.querySelectorAll(
+        'div[class*="font-claude"], [data-testid="assistant-message"], div[class*="claude-message"], div.font-claude-message, div[class*="AssistantMessage"]'
+      )
     );
 
     const maxLen = Math.max(humanEls.length, claudeEls.length);
@@ -182,8 +190,9 @@
 
     messages.forEach((msg) => {
       const label = (msg.role === "user" || msg.role === "human") ? "User:" : "Claude:";
+      const htmlFormatted = escapeHtml(msg.text).replace(/\n\n/g, "<br><br>").replace(/\n/g, "<br>");
       parts.push(
-        `<p><strong>${label}</strong> ${escapeHtml(msg.text)}</p>`
+        `<p><strong>${label}</strong> ${htmlFormatted}</p>`
       );
     });
 

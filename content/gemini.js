@@ -140,7 +140,7 @@
     return (text || "")
       .replace(/\r\n/g, "\n")
       .replace(/\r/g, "\n")
-      .replace(/\n{2,}/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
       .trim();
   }
 
@@ -153,6 +153,24 @@
         .replace(/\d+:\d+\s*\/\s*\d+:\d+/g, "")
         .trim()
     );
+  }
+
+  function extractUserQueryText(el) {
+    if (!el) return "";
+    const paragraphs = [...el.querySelectorAll(".query-text p, .user-query-text p, p")]
+      .map((p) => p.innerText.trim())
+      .filter((t) => t.length > 0);
+    
+    let raw = paragraphs.length > 0 ? paragraphs.join("\n\n") : (el.innerText || el.textContent || "");
+    raw = raw.replace(/^you said[\s,:]*/i, "").trim();
+
+    if (!raw || raw.length < 2) {
+      const hasMedia = el.querySelector("img, video, canvas, file-chip, [aria-label*='file'], [aria-label*='image']");
+      if (hasMedia) {
+        raw = "[Uploaded Attachment / Image]";
+      }
+    }
+    return cleanMessageTextForTextOutput(raw);
   }
 
   /**
@@ -180,13 +198,7 @@
     const aiNodes = deepShadowAll("model-response, ms-model-response", container);
 
     if (userNodes.length > 0 || aiNodes.length > 0) {
-      const userMessages = userNodes.map((el) => {
-        const paragraphs = [...el.querySelectorAll(".query-text p")]
-          .map((p) => p.innerText.trim())
-          .filter((t) => t.length > 0);
-        const userText = paragraphs.length > 0 ? paragraphs.join(" ") : (el.innerText || "");
-        return cleanMessageTextForTextOutput(userText.replace(/^you said[\s,:]*/i, ""));
-      });
+      const userMessages = userNodes.map((el) => extractUserQueryText(el));
       const geminiMessages = aiNodes.map((el) => extractGeminiResponseText(el));
 
       const maxLen = Math.max(userMessages.length, geminiMessages.length);
@@ -199,14 +211,7 @@
     }
 
     // Fallback: querySelectorAll on container
-    const userMessages = [...container.querySelectorAll("user-query")].map((el) => {
-      const userText = [...el.querySelectorAll(".query-text p")]
-        .map((p) => p.innerText.trim())
-        .filter((t) => t.length > 0)
-        .join(" ")
-        .trim();
-      return cleanMessageTextForTextOutput(userText || el.innerText || "");
-    });
+    const userMessages = [...container.querySelectorAll("user-query")].map((el) => extractUserQueryText(el));
     const geminiMessages = [...container.querySelectorAll("model-response")].map((el) =>
       extractGeminiResponseText(el)
     );
@@ -230,23 +235,21 @@
 
   function cleanMessageTextForTextOutput(text) {
     if (text == null) return "";
-    // Preserve line structure (especially fenced code blocks).
+    // Preserve line structure (especially fenced code blocks & paragraph breaks).
     return String(text)
       .replace(/\r\n/g, "\n")
       .replace(/\r/g, "\n")
       .replace(/\d+:\d+\s*\/\s*\d+:\d+/g, "")
       .replace(/[ \t]+\n/g, "\n")
-      .replace(/\n{3,}/g, "\n\n")
+      .replace(/\n{4,}/g, "\n\n\n")
       .trim();
   }
 
   function extractGeminiResponseText(modelResponseEl) {
     if (!modelResponseEl) return "";
 
-    // Clone first so live page DOM stays untouched.
     const clone = modelResponseEl.cloneNode(true);
 
-    // Pierce shadow roots inside code-block custom elements
     const codeBlockEls = deepShadowAll("code-block", modelResponseEl);
     if (codeBlockEls.length > 0) {
       codeBlockEls.forEach((cb) => {
@@ -262,7 +265,6 @@
       });
     }
 
-    // Replace code-like blocks with fenced placeholders before innerText flattening.
     const codeLikeNodes = Array.from(
       clone.querySelectorAll(".code-block, .code-container, pre, code")
     );
@@ -290,7 +292,8 @@
     messages.forEach((msg) => {
       const label = (msg.role === "user" || msg.role === "human") ? "User:" : "Gemini:";
       const cleaned = cleanMessageTextForTextOutput(msg.text);
-      parts.push(`<p><strong>${label}</strong> ${escapeHtml(cleaned)}</p>`);
+      const htmlFormatted = escapeHtml(cleaned).replace(/\n\n/g, "<br><br>").replace(/\n/g, "<br>");
+      parts.push(`<p><strong>${label}</strong> ${htmlFormatted}</p>`);
     });
     parts.push("</div>");
     return parts.join("");
