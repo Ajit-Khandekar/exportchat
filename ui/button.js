@@ -86,13 +86,24 @@
     container.appendChild(tooltip);
     document.documentElement.appendChild(container);
 
-    scrollBtn.addEventListener("click", (event) => {
+    scrollBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
       closeDropdown();
-      if (window.ExportChat && typeof window.ExportChat.scrollChatToTop === "function") {
-        window.ExportChat.scrollChatToTop();
-      } else {
-        window.scrollTo({ top: 0, behavior: "smooth" });
+      tooltip.textContent = "Scrolling to top...";
+      tooltip.classList.add("visible");
+      scrollBtn.style.pointerEvents = "none";
+      try {
+        if (window.ExportChat && typeof window.ExportChat.scrollChatToTop === "function") {
+          await window.ExportChat.scrollChatToTop();
+        } else {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      } catch (e) {
+        console.error("[ExportChat] Scroll to top failed:", e);
+      } finally {
+        tooltip.textContent = "Scroll to top of chat";
+        tooltip.classList.remove("visible");
+        scrollBtn.style.pointerEvents = "";
       }
     });
 

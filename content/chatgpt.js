@@ -35,6 +35,20 @@
   }
 
   function findChatGPTConversationRoot() {
+    const sampleTurn = document.querySelector("[data-testid='conversation-turn'], [data-test='conversation-turn'], article, section");
+    if (sampleTurn) {
+      let el = sampleTurn.parentElement;
+      while (el && el !== document.documentElement && el !== document.body) {
+        if (el.scrollHeight > el.clientHeight + 20) {
+          const overflow = window.getComputedStyle(el).overflowY;
+          if (overflow === "auto" || overflow === "scroll" || overflow === "overlay") {
+            return el;
+          }
+        }
+        el = el.parentElement;
+      }
+    }
+
     const possibleSelectors = [
       "main [data-testid='conversation-turns']",
       "main [data-test='conversation-turns']",
@@ -44,11 +58,67 @@
 
     for (const sel of possibleSelectors) {
       const el = document.querySelector(sel);
-      if (el) return el;
+      if (el && el.scrollHeight > el.clientHeight + 20) return el;
     }
 
-    return null;
+    return document.querySelector("main") || document.documentElement;
   }
+
+  async function scrollChatToTopForCapture() {
+    const container = findChatGPTConversationRoot();
+    let previousTop = -1;
+    let stuckCount = 0;
+    const maxSteps = 40;
+
+    for (let i = 0; i < maxSteps; i++) {
+      const currentScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
+
+      if (container !== document.documentElement && container.scrollTop === 0) {
+        container.scrollTop = 0;
+        window.scrollTo(0, 0);
+        container.dispatchEvent(new Event("scroll", { bubbles: true }));
+        window.dispatchEvent(new Event("scroll", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        if (container.scrollTop === 0) {
+          break;
+        }
+      }
+
+      if (container !== document.documentElement && container.scrollTop !== undefined) {
+        container.scrollTop = Math.max(0, container.scrollTop - 1000);
+      }
+      window.scrollBy(0, -1000);
+
+      try {
+        container.dispatchEvent(new Event("scroll", { bubbles: true }));
+        window.dispatchEvent(new Event("scroll", { bubbles: true }));
+      } catch (e) {}
+
+      await new Promise((resolve) => setTimeout(resolve, 400));
+
+      const newScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
+      if (newScrollTop === previousTop) {
+        stuckCount++;
+        if (stuckCount >= 3) break;
+      } else {
+        stuckCount = 0;
+      }
+      previousTop = newScrollTop;
+    }
+
+    if (container !== document.documentElement && container.scrollTop !== undefined) {
+      container.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+    try {
+      container.dispatchEvent(new Event("scroll", { bubbles: true }));
+      window.dispatchEvent(new Event("scroll", { bubbles: true }));
+    } catch (e) {}
+
+    await new Promise((resolve) => setTimeout(resolve, 800));
+  }
+
+  window.ExportChat.scrollChatToTop = scrollChatToTopForCapture;
 
   function escapeHtml(str) {
     return (str || "")
@@ -159,31 +229,6 @@
 
     return lines.join("\n").trimEnd();
   }
-
-  async function scrollChatToTopForCapture() {
-    const root = findChatGPTConversationRoot() || document.querySelector("main") || document.documentElement;
-    let iterations = 0;
-    const maxIterations = 30;
-
-    while ((root.scrollTop > 0 || window.scrollY > 0) && iterations < maxIterations) {
-      root.scrollTop = Math.max(0, root.scrollTop - 1000);
-      window.scrollBy(0, -1000);
-
-      root.dispatchEvent(new Event("scroll", { bubbles: true }));
-      window.dispatchEvent(new Event("scroll", { bubbles: true }));
-
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      iterations++;
-    }
-
-    root.scrollTop = 0;
-    window.scrollTo(0, 0);
-    root.dispatchEvent(new Event("scroll", { bubbles: true }));
-    window.dispatchEvent(new Event("scroll", { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 800));
-  }
-
-  window.ExportChat.scrollChatToTop = scrollChatToTopForCapture;
 
   window.ExportChat.getCurrentChat = async function getCurrentChatChatGPT() {
     await scrollChatToTopForCapture();
