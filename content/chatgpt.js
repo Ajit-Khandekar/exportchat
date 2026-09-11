@@ -179,29 +179,25 @@
     return lines.join("\n").trimEnd();
   }
 
-  function autoScrollToBottom() {
-    return new Promise((resolve) => {
-      let lastHeight = 0;
-      let unchangedCount = 0;
-      const interval = setInterval(() => {
-        window.scrollTo(0, document.body.scrollHeight);
-        const currentHeight = document.body.scrollHeight;
-        if (currentHeight === lastHeight) {
-          unchangedCount++;
-          if (unchangedCount >= 3) {
-            clearInterval(interval);
-            resolve();
-          }
-        } else {
-          unchangedCount = 0;
-        }
-        lastHeight = currentHeight;
-      }, 600);
-    });
+  async function scrollChatToTopForCapture() {
+    const root = findChatGPTConversationRoot() || document.querySelector("main") || document.documentElement;
+    let iterations = 0;
+    const maxIterations = 30;
+
+    while ((root.scrollTop > 0 || window.scrollY > 0) && iterations < maxIterations) {
+      root.scrollTop = Math.max(0, root.scrollTop - 1000);
+      window.scrollBy(0, -1000);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      iterations++;
+    }
+
+    root.scrollTop = 0;
+    window.scrollTo(0, 0);
+    await new Promise((resolve) => setTimeout(resolve, 800));
   }
 
   window.ExportChat.getCurrentChat = async function getCurrentChatChatGPT() {
-    await autoScrollToBottom();
+    await scrollChatToTopForCapture();
     const title = getChatGPTTitle();
     const root = findChatGPTConversationRoot();
     const messages = extractChatGPTMessages(root);
