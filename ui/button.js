@@ -119,34 +119,44 @@
         return;
       }
 
-      window.ExportChat.getCurrentChat().then(function(chat) {
-        if (!chat) {
-          closeDropdown();
-          return;
-        }
-        try {
-          switch (format) {
-            case "markdown":
-              window.ExportChat.exportAsMarkdown(chat);
-              break;
-            case "pdf":
-              window.ExportChat.exportAsPDF(chat);
-              break;
-            case "text":
-              window.ExportChat.exportAsText(chat);
-              break;
-            case "html":
-              window.ExportChat.exportAsHTML(chat);
-              break;
-            case "json":
-              window.ExportChat.exportAsJSON(chat);
-              break;
+      button.classList.add("exportchat-loading");
+      tooltip.textContent = "Loading chat history...";
+      tooltip.classList.add("visible");
+      closeDropdown();
+
+      window.ExportChat.getCurrentChat()
+        .then(function(chat) {
+          if (!chat) return;
+          try {
+            switch (format) {
+              case "markdown":
+                window.ExportChat.exportAsMarkdown(chat);
+                break;
+              case "pdf":
+                window.ExportChat.exportAsPDF(chat);
+                break;
+              case "text":
+                window.ExportChat.exportAsText(chat);
+                break;
+              case "html":
+                window.ExportChat.exportAsHTML(chat);
+                break;
+              case "json":
+                window.ExportChat.exportAsJSON(chat);
+                break;
+            }
+          } catch (e) {
+            console.error("[ExportChat] Export failed:", e);
           }
-        } catch (e) {
-          console.error("[ExportChat] Export failed:", e);
-        }
-        closeDropdown();
-      });
+        })
+        .catch(function(e) {
+          console.error("[ExportChat] getCurrentChat failed:", e);
+        })
+        .finally(function() {
+          button.classList.remove("exportchat-loading");
+          tooltip.textContent = "Export this chat";
+          tooltip.classList.remove("visible");
+        });
       return;
     });
 

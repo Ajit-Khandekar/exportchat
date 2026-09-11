@@ -100,6 +100,22 @@
       .replace(/'/g, "&#39;");
   }
 
+  function extractPerplexityCitations(container) {
+    if (!container) return [];
+    const links = Array.from(container.querySelectorAll("a[href^='http']"));
+    const citations = [];
+    const seenUrls = new Set();
+    links.forEach((a) => {
+      const url = a.getAttribute("href");
+      const title = (a.innerText || a.textContent || url).replace(/\s+/g, " ").trim();
+      if (url && !seenUrls.has(url) && !url.includes("perplexity.ai")) {
+        seenUrls.add(url);
+        citations.push({ title, url });
+      }
+    });
+    return citations;
+  }
+
   function extractPerplexityMessages() {
     // User messages: <span> with all four confirmed classes.
     const userEls = [
@@ -109,9 +125,6 @@
     ];
 
     // AI response containers: collect the grandparent of every p.my-2 element.
-    // Using grandparent (not immediate parent) ensures bullet-list items share
-    // a common ancestor (the list container), so the whole response collapses
-    // into one block instead of each bullet becoming a separate message.
     const allAncestors = [];
     const seen = new Set();
     document.querySelectorAll("p.my-2").forEach((p) => {
@@ -122,8 +135,6 @@
       }
     });
 
-    // Discard any container that is a descendant of another — keep outermost only.
-    // This collapses any remaining nesting into a single block per response.
     const responseContainers = allAncestors.filter(
       (el) => !allAncestors.some((other) => other !== el && other.contains(el))
     );
@@ -136,7 +147,11 @@
         if (text) messages.push({ role: "user", text });
       }
       if (responseContainers[i]) {
-        const text = stripCitationBadges(extractTextFromElement(responseContainers[i]));
+        let text = stripCitationBadges(extractTextFromElement(responseContainers[i]));
+        const citations = extractPerplexityCitations(responseContainers[i]);
+        if (citations.length > 0) {
+          text += "\n\nSources:\n" + citations.map((c, idx) => `[${idx + 1}] ${c.title || c.url} (${c.url})`).join("\n");
+        }
         if (text) messages.push({ role: "assistant", text });
       }
     }

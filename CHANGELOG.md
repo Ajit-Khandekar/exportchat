@@ -6,12 +6,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [1.1.0] - 2026-09-11
 
+### Added
+- Loading indicator feedback on floating export button (`ui/button.js`) during asynchronous chat capture (`"Loading chat history..."`).
+- Extracted and appended source citation links (`[1]`, `[2]`) in Perplexity exports under a clean `Sources:` section.
+
 ### Fixed
-- Gemini assistant response extraction across Shadow DOM boundaries — added deep Shadow DOM traversal (`deepShadowAll`) and multi-strategy custom element selectors (`ms-chat-turn`, `ms-model-response`, `ms-user-query`) to ensure all assistant responses are included in exports
+- Gemini assistant response extraction across Shadow DOM boundaries — added deep Shadow DOM traversal (`deepShadowAll`) and multi-strategy custom element selectors to ensure all assistant responses are included in exports.
+- Fixed JSON export schema (`exportAsJSON`) — now outputs a clean, structured array of `{ role, content }` objects under `messages` instead of flat string dumps.
 
 ### Changed
-- Structured JSON export schema (`exportAsJSON`) — output now formats chat history as a clean, machine-readable array of `{ role, content }` objects under `messages` instead of flat `html` / `text` root string dumps
-- Standardized user message role to `"user"` across ChatGPT, Claude, Gemini, and Perplexity content scripts
+- Standardized user message role to `"user"` across ChatGPT, Claude, Gemini, and Perplexity content scripts.
 
 ---
 
