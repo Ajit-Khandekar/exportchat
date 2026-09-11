@@ -109,6 +109,4 @@ MIT License - see [LICENSE](LICENSE) file.
 
 ## Author
 
-Built by [Ajit Khandekar](https://www.linkedin.com/in/ajitkhandekar/)
-
-*Built using Cursor AI and Claude Code.*
+Built by [Ajit Khandekar](https://www.linkedin.com/in/ajitkhandekar/) 
