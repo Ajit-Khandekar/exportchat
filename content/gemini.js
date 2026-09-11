@@ -98,6 +98,33 @@
   }
 
   /**
+   * Deep Shadow DOM traversal helper.
+   * Recursively walks accessible shadow roots to find all matching elements.
+   */
+  function deepShadowAll(sel, root = document) {
+    const found = [];
+    const visited = new WeakSet();
+    function walk(node) {
+      if (!node || visited.has(node)) return;
+      visited.add(node);
+      try {
+        if (node.querySelectorAll) {
+          node.querySelectorAll(sel).forEach((n) => found.push(n));
+        }
+      } catch (e) {}
+      try {
+        if (node.querySelectorAll) {
+          node.querySelectorAll("*").forEach((el) => {
+            if (el.shadowRoot) walk(el.shadowRoot);
+          });
+        }
+      } catch (e) {}
+    }
+    walk(root);
+    return found;
+  }
+
+  /**
    * Returns the active conversation container so DOM queries are scoped to the
    * current chat only (not sidebar history or cached panels).
    */
@@ -129,20 +156,56 @@
   }
 
   /**
-   * Extract messages using precise DOM selectors so we avoid sidebar/UI noise.
+   * Extract messages using precise DOM selectors & deep shadow DOM traversal
+   * so we avoid missing assistant turns or picking up sidebar/UI noise.
    */
   function extractMessages() {
     const container = findActiveConversationContainer();
 
+    // Strategy 1: <ms-chat-turn> elements (newer Gemini layout)
+    const msTurns = deepShadowAll("ms-chat-turn", container);
+    if (msTurns.length > 0) {
+      const messages = [];
+      msTurns.forEach((turn) => {
+        const model = (turn.getAttribute("model") || "").toLowerCase();
+        const role = model === "user" ? "user" : "assistant";
+        const text = extractGeminiResponseText(turn);
+        if (text) messages.push({ role, text });
+      });
+      if (messages.length > 0) return messages;
+    }
+
+    // Strategy 2: <user-query> / <ms-user-query> and <model-response> / <ms-model-response>
+    const userNodes = deepShadowAll("user-query, ms-user-query", container);
+    const aiNodes = deepShadowAll("model-response, ms-model-response", container);
+
+    if (userNodes.length > 0 || aiNodes.length > 0) {
+      const userMessages = userNodes.map((el) => {
+        const paragraphs = [...el.querySelectorAll(".query-text p")]
+          .map((p) => p.innerText.trim())
+          .filter((t) => t.length > 0);
+        const userText = paragraphs.length > 0 ? paragraphs.join(" ") : (el.innerText || "");
+        return cleanMessageTextForTextOutput(userText.replace(/^you said[\s,:]*/i, ""));
+      });
+      const geminiMessages = aiNodes.map((el) => extractGeminiResponseText(el));
+
+      const maxLen = Math.max(userMessages.length, geminiMessages.length);
+      const messages = [];
+      for (let i = 0; i < maxLen; i++) {
+        if (userMessages[i]) messages.push({ role: "user", text: userMessages[i] });
+        if (geminiMessages[i]) messages.push({ role: "assistant", text: geminiMessages[i] });
+      }
+      if (messages.length > 0) return messages;
+    }
+
+    // Fallback: querySelectorAll on container
     const userMessages = [...container.querySelectorAll("user-query")].map((el) => {
-      // Use '.query-text p' to exclude the cdk-visually-hidden "You said" span
-      // which lives outside .query-text, and to avoid the missing-first-word bug.
       const userText = [...el.querySelectorAll(".query-text p")]
         .map((p) => p.innerText.trim())
         .filter((t) => t.length > 0)
         .join(" ")
         .trim();
-      return cleanMessageTextForTextOutput(userText);
+      return cleanMessageTextForTextOutput(userText || el.innerText || "");
     });
     const geminiMessages = [...container.querySelectorAll("model-response")].map((el) =>
       extractGeminiResponseText(el)
@@ -183,6 +246,22 @@
     // Clone first so live page DOM stays untouched.
     const clone = modelResponseEl.cloneNode(true);
 
+    // Pierce shadow roots inside code-block custom elements
+    const codeBlockEls = deepShadowAll("code-block", modelResponseEl);
+    if (codeBlockEls.length > 0) {
+      codeBlockEls.forEach((cb) => {
+        const inner = (cb.shadowRoot || cb).querySelector("code") || cb;
+        const raw = (inner.textContent || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        if (raw.trim()) {
+          const classAttr = inner.getAttribute("class") || "";
+          const langMatch = classAttr.match(/\blanguage-([a-z0-9_+-]+)/i);
+          const language = langMatch ? langMatch[1] : "";
+          const fenced = "\n```" + language + "\n" + raw.trimEnd() + "\n```\n";
+          cb.replaceWith(document.createTextNode(fenced));
+        }
+      });
+    }
+
     // Replace code-like blocks with fenced placeholders before innerText flattening.
     const codeLikeNodes = Array.from(
       clone.querySelectorAll(".code-block, .code-container, pre, code")
@@ -201,7 +280,7 @@
       node.replaceWith(document.createTextNode(fenced));
     });
 
-    const flattened = clone.innerText || "";
+    const flattened = clone.innerText || clone.textContent || "";
     return cleanGeminiMessage(flattened);
   }
 
