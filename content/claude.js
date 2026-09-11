@@ -149,37 +149,43 @@
   }
 
   function extractClaudeMessages() {
-    const humanEls = Array.from(
-      document.querySelectorAll(
-        'div[class*="font-user-message"], [data-testid="user-message"], div[class*="user-message"], div.font-user-message, div[class*="UserMessage"]'
-      )
-    );
-    const claudeEls = Array.from(
-      document.querySelectorAll(
-        'div[class*="font-claude"], [data-testid="assistant-message"], div[class*="claude-message"], div.font-claude-message, div[class*="AssistantMessage"]'
-      )
+    const selector = [
+      'div[class*="font-user-message"]',
+      '[data-testid="user-message"]',
+      'div[class*="user-message"]',
+      'div.font-user-message',
+      'div[class*="UserMessage"]',
+      'div[class*="font-claude"]',
+      '[data-testid="assistant-message"]',
+      'div[class*="claude-message"]',
+      'div.font-claude-message',
+      'div[class*="AssistantMessage"]'
+    ].join(", ");
+
+    const rawNodes = Array.from(document.querySelectorAll(selector));
+
+    // Filter out inner/nested elements so we only process top-level message blocks
+    const turnNodes = rawNodes.filter(
+      (el) => !rawNodes.some((other) => other !== el && other.contains(el))
     );
 
-    const maxLen = Math.max(humanEls.length, claudeEls.length);
     const messages = [];
 
-    for (let i = 0; i < maxLen; i++) {
-      const humanEl = humanEls[i];
-      if (humanEl) {
-        const text = extractTextFromElement(humanEl);
-        if (text) {
-          messages.push({ role: "user", text });
-        }
-      }
+    turnNodes.forEach((node) => {
+      const cls = (node.className || "").toLowerCase();
+      const testId = (node.getAttribute("data-testid") || "").toLowerCase();
 
-      const claudeEl = claudeEls[i];
-      if (claudeEl) {
-        const text = extractTextFromElement(claudeEl);
-        if (text) {
-          messages.push({ role: "assistant", text });
-        }
+      const isUser =
+        cls.includes("user") ||
+        testId.includes("user") ||
+        cls.includes("font-user");
+
+      const role = isUser ? "user" : "assistant";
+      const text = extractTextFromElement(node);
+      if (text) {
+        messages.push({ role, text });
       }
-    }
+    });
 
     return messages;
   }
@@ -214,25 +220,65 @@
     return lines.join("\n").trimEnd();
   }
 
-  async function scrollChatToTopForCapture() {
-    const scrollContainer =
-      document.querySelector("main") ||
-      document.querySelector("div[class*='conversation']") ||
-      document.documentElement;
+  function findScrollableContainer() {
+    const candidates = [
+      document.querySelector("main [class*='overflow-y-auto']"),
+      document.querySelector("[class*='overflow-y-auto']"),
+      document.querySelector("main"),
+      document.documentElement
+    ];
 
-    let iterations = 0;
-    const maxIterations = 30;
-
-    while ((scrollContainer.scrollTop > 0 || window.scrollY > 0) && iterations < maxIterations) {
-      scrollContainer.scrollTop = Math.max(0, scrollContainer.scrollTop - 1000);
-      window.scrollBy(0, -1000);
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      iterations++;
+    for (const el of candidates) {
+      if (el && el.scrollHeight > el.clientHeight + 50) {
+        return el;
+      }
     }
 
-    scrollContainer.scrollTop = 0;
+    const allDivs = Array.from(document.querySelectorAll("div, section, main"));
+    for (const el of allDivs) {
+      if (el.scrollHeight > el.clientHeight + 100) {
+        const overflow = window.getComputedStyle(el).overflowY;
+        if (overflow === "auto" || overflow === "scroll") {
+          return el;
+        }
+      }
+    }
+    return document.documentElement;
+  }
+
+  function getMessageCount() {
+    return document.querySelectorAll(
+      'div[class*="font-user-message"], [data-testid="user-message"], div[class*="user-message"], div.font-user-message, div[class*="UserMessage"], div[class*="font-claude"], [data-testid="assistant-message"], div[class*="claude-message"], div.font-claude-message, div[class*="AssistantMessage"]'
+    ).length;
+  }
+
+  async function scrollChatToTopForCapture() {
+    const container = findScrollableContainer();
+    let previousMessageCount = 0;
+    let unchangedCount = 0;
+    const maxIterations = 20;
+
+    for (let i = 0; i < maxIterations; i++) {
+      container.scrollTop = 0;
+      window.scrollTo(0, 0);
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      const currentMessageCount = getMessageCount();
+      if (currentMessageCount === previousMessageCount && (container.scrollTop === 0 || window.scrollY === 0)) {
+        unchangedCount++;
+        if (unchangedCount >= 2) {
+          break;
+        }
+      } else {
+        unchangedCount = 0;
+      }
+      previousMessageCount = currentMessageCount;
+    }
+
+    container.scrollTop = 0;
     window.scrollTo(0, 0);
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await new Promise((resolve) => setTimeout(resolve, 600));
   }
 
   window.ExportChat.getCurrentChat = async function getCurrentChatClaude() {
