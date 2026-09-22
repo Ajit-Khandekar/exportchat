@@ -135,15 +135,15 @@
 
   function extractTextFromElement(el) {
     const clone = el.cloneNode(true);
+    clone.querySelectorAll("button, [data-testid*='action'], [data-testid*='copy'], [data-testid*='show-more'], [aria-label*='Show more']").forEach((b) => b.remove());
+
     const preEls = Array.from(el.querySelectorAll("pre"));
     const clonePres = Array.from(clone.querySelectorAll("pre"));
     preEls.forEach(function(pre, i) {
       const code = pre.querySelector("code");
       const lang = (code ? code.className : "").replace(/.*\blanguage-(\S+).*/, "$1") || "";
-      // Read from <code> only to exclude any language label elements inside <pre>
       const content = code ? (code.innerText || code.textContent || "") : (pre.innerText || pre.textContent || "");
       if (clonePres[i]) {
-        // Remove preceding sibling if it looks like an external language label
         const prevSib = clonePres[i].previousElementSibling;
         if (prevSib && lang && prevSib.textContent.trim().length < 60 &&
             prevSib.textContent.trim().toLowerCase().includes(lang.toLowerCase())) {
@@ -155,23 +155,33 @@
     clone.querySelectorAll("br").forEach(function(br) { br.replaceWith("\n"); });
     clone.querySelectorAll("p").forEach(function(p) { p.after("\n"); });
     var text = (clone.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
-    // Safety net: remove language label still on the line just before its opening fence
     text = text.replace(/^(\w+)\n(```\1)/gm, "$2");
+    text = text.replace(/Show more\s*Show less/gi, "").trim();
     return text;
   }
 
   function extractChatGPTMessages(root) {
     if (!root) return [];
 
+    const rawTurns = Array.from(root.querySelectorAll("[data-testid='conversation-turn'], [data-test='conversation-turn'], article"));
+    let turnNodes = rawTurns.filter(
+      (el) => !rawTurns.some((other) => other !== el && other.contains(el))
+    );
+
+    if (turnNodes.length === 0) {
+      turnNodes = Array.from(root.querySelectorAll("article, section"));
+    }
+
     const messages = [];
 
-    const turns = root.querySelectorAll("[data-testid='conversation-turn'], [data-test='conversation-turn'], article, section");
-
-    turns.forEach((turn) => {
+    turnNodes.forEach((turn) => {
       const segments = turn.querySelectorAll("[data-message-author-role], [data-testid*='message'], [data-test*='message']");
+      const topLevelSegments = Array.from(segments).filter(
+        (seg) => !Array.from(segments).some((other) => other !== seg && other.contains(seg))
+      );
 
-      if (segments.length > 0) {
-        segments.forEach((seg) => {
+      if (topLevelSegments.length > 0) {
+        topLevelSegments.forEach((seg) => {
           const roleAttr =
             seg.getAttribute("data-message-author-role") ||
             seg.getAttribute("data-testid") ||
@@ -183,12 +193,12 @@
           else if (lower.includes("assistant")) role = "assistant";
 
           const text = extractTextFromElement(seg);
-          if (!text) return;
+          if (!text || text === "Show moreShow less") return;
           messages.push({ role, text });
         });
       } else {
         const text = extractTextFromElement(turn);
-        if (!text) return;
+        if (!text || text === "Show moreShow less") return;
         const isUserLike =
           turn.className.toLowerCase().includes("user") ||
           turn.getAttribute("data-testid")?.toLowerCase().includes("user") ||
@@ -198,7 +208,15 @@
       }
     });
 
-    return messages;
+    const deduplicated = [];
+    messages.forEach((msg) => {
+      const last = deduplicated[deduplicated.length - 1];
+      if (!last || last.role !== msg.role || last.text !== msg.text) {
+        deduplicated.push(msg);
+      }
+    });
+
+    return deduplicated;
   }
 
   function buildChatGPTConversationHTML(title, messages) {

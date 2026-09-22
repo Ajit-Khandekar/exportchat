@@ -38,15 +38,15 @@
 
   function extractTextFromElement(el) {
     const clone = el.cloneNode(true);
+    clone.querySelectorAll("a[href*='#'], button, [class*='citation'], [class*='badge'], [class*='source']").forEach((b) => b.remove());
+
     const preEls = Array.from(el.querySelectorAll("pre"));
     const clonePres = Array.from(clone.querySelectorAll("pre"));
     preEls.forEach(function(pre, i) {
       const code = pre.querySelector("code");
       const lang = (code ? code.className : "").replace(/.*\blanguage-(\S+).*/, "$1") || "";
-      // Read from <code> only to exclude any language label elements inside <pre>
       const content = code ? (code.innerText || code.textContent || "") : (pre.innerText || pre.textContent || "");
       if (clonePres[i]) {
-        // Remove preceding sibling if it looks like an external language label
         const prevSib = clonePres[i].previousElementSibling;
         if (prevSib && lang && prevSib.textContent.trim().length < 60 &&
             prevSib.textContent.trim().toLowerCase().includes(lang.toLowerCase())) {
@@ -58,15 +58,16 @@
     clone.querySelectorAll("br").forEach(function(br) { br.replaceWith("\n"); });
     clone.querySelectorAll("p").forEach(function(p) { p.after("\n"); });
     var text = (clone.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
-    // Safety net: remove language label still on the line just before its opening fence
     text = text.replace(/^(\w+)\n(```\1)/gm, "$2");
     return text;
   }
 
   function stripCitationBadges(text) {
-    // Remove inline source citation badges like "amazon +5" or "source +1"
-    // that Perplexity injects at the end of response blocks.
-    return text.replace(/\s+[a-zA-Z]+(\s+[a-zA-Z]+)?\s+\+\d+/g, "").trim();
+    if (!text) return "";
+    return text
+      .replace(/\s+[a-zA-Z0-9.-]+(\.[a-zA-Z]{2,})?\s*\+\d+/g, "")
+      .replace(/\s+[a-zA-Z]+(\s+[a-zA-Z]+)?\s+\+\d+/g, "")
+      .trim();
   }
 
   function escapeHtml(str) {
@@ -95,17 +96,13 @@
   }
 
   function extractPerplexityMessages() {
-    // User messages: <span> with all four confirmed classes.
-    const userEls = [
-      ...document.querySelectorAll(
-        "span.font-sans.text-base.break-words.select-text"
-      ),
-    ];
+    const userNodes = Array.from(
+      document.querySelectorAll("span.font-sans.text-base.break-words.select-text, [data-testid*='user'], div[class*='user-query']")
+    );
 
-    // AI response containers: collect the grandparent of every p.my-2 element.
     const allAncestors = [];
     const seen = new Set();
-    document.querySelectorAll("p.my-2").forEach((p) => {
+    document.querySelectorAll("p.my-2, div.markdown").forEach((p) => {
       const ancestor = p.parentElement?.parentElement || p.parentElement;
       if (ancestor && !seen.has(ancestor)) {
         seen.add(ancestor);
@@ -117,23 +114,41 @@
       (el) => !allAncestors.some((other) => other !== el && other.contains(el))
     );
 
+    const items = [];
+    userNodes.forEach((node) => items.push({ node, role: "user" }));
+    responseContainers.forEach((node) => items.push({ node, role: "assistant" }));
+
+    items.sort((a, b) => {
+      const pos = a.node.compareDocumentPosition(b.node);
+      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+      if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+      return 0;
+    });
+
     const messages = [];
-    const maxLen = Math.max(userEls.length, responseContainers.length);
-    for (let i = 0; i < maxLen; i++) {
-      if (userEls[i]) {
-        const text = userEls[i].innerText.trim();
-        if (text) messages.push({ role: "user", text });
-      }
-      if (responseContainers[i]) {
-        let text = stripCitationBadges(extractTextFromElement(responseContainers[i]));
-        const citations = extractPerplexityCitations(responseContainers[i]);
+    items.forEach(({ node, role }) => {
+      if (role === "user") {
+        const text = (node.innerText || node.textContent || "").trim();
+        if (text) messages.push({ role, text });
+      } else {
+        let text = stripCitationBadges(extractTextFromElement(node));
+        const citations = extractPerplexityCitations(node);
         if (citations.length > 0) {
           text += "\n\nSources:\n" + citations.map((c, idx) => `[${idx + 1}] ${c.title || c.url} (${c.url})`).join("\n");
         }
-        if (text) messages.push({ role: "assistant", text });
+        if (text) messages.push({ role, text });
       }
-    }
-    return messages;
+    });
+
+    const deduplicated = [];
+    messages.forEach((msg) => {
+      const last = deduplicated[deduplicated.length - 1];
+      if (!last || last.role !== msg.role || last.text !== msg.text) {
+        deduplicated.push(msg);
+      }
+    });
+
+    return deduplicated;
   }
 
   function buildHtml(title, messages) {
