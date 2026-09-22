@@ -157,102 +157,78 @@
     return lines.join("\n").trimEnd();
   }
 
-  function findAllScrollableContainers() {
-    const list = new Set();
+  function findScrollableContainer() {
     const sampleMsg = document.querySelector("span.font-sans, p.my-2, [data-testid='thread']");
     if (sampleMsg) {
       let el = sampleMsg.parentElement;
       while (el && el !== document.documentElement && el !== document.body) {
-        if (el.scrollHeight > el.clientHeight + 10) {
-          list.add(el);
+        if (el.scrollHeight > el.clientHeight + 20) {
+          const overflow = window.getComputedStyle(el).overflowY;
+          if (overflow === "auto" || overflow === "scroll" || overflow === "overlay") {
+            return el;
+          }
         }
         el = el.parentElement;
       }
     }
 
-    const possibleSelectors = [
-      "main",
-      "[data-testid='thread']",
-      "[class*='overflow-y-auto']",
-    ];
-
-    for (const sel of possibleSelectors) {
-      document.querySelectorAll(sel).forEach((el) => {
-        if (el && el.scrollHeight > el.clientHeight + 10) {
-          list.add(el);
-        }
-      });
-    }
-
-    if (list.size === 0) {
-      list.add(document.documentElement);
-    }
-
-    return Array.from(list);
-  }
-
-  function findScrollableContainer() {
-    const containers = findAllScrollableContainers();
-    return containers[0] || document.documentElement;
+    return (
+      document.querySelector("main") ||
+      document.querySelector("[data-testid='thread']") ||
+      document.documentElement
+    );
   }
 
   async function scrollChatToTopForCapture() {
-    const containers = findAllScrollableContainers();
-    let previousTops = containers.map((c) => (c !== document.documentElement && c.scrollTop !== undefined ? c.scrollTop : window.scrollY));
+    const container = findScrollableContainer();
+    let previousTop = -1;
     let stuckCount = 0;
-    const maxSteps = 50;
+    const maxSteps = 30;
 
     for (let i = 0; i < maxSteps; i++) {
-      const allAtZero = containers.every((c) => (c === document.documentElement ? window.scrollY === 0 : c.scrollTop === 0));
+      const currentScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
 
-      if (allAtZero) {
-        containers.forEach((c) => {
-          if (c !== document.documentElement && c.scrollTop !== undefined) c.scrollTop = 0;
-          try { c.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {}
-        });
+      if (container !== document.documentElement && container.scrollTop === 0) {
+        container.scrollTop = 0;
         window.scrollTo(0, 0);
-        try { window.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {}
-
-        await new Promise((resolve) => setTimeout(resolve, 350));
-        const stillAllZero = containers.every((c) => (c === document.documentElement ? window.scrollY === 0 : c.scrollTop === 0));
-        if (stillAllZero) {
+        container.dispatchEvent(new Event("scroll", { bubbles: true }));
+        window.dispatchEvent(new Event("scroll", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        if (container.scrollTop === 0) {
           break;
         }
       }
 
-      containers.forEach((c) => {
-        if (c !== document.documentElement && c.scrollTop !== undefined) {
-          c.scrollTop = Math.max(0, c.scrollTop - 2500);
-        }
-        try { c.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {}
-      });
-      window.scrollBy(0, -2500);
-      try { window.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {}
+      if (container !== document.documentElement && container.scrollTop !== undefined) {
+        container.scrollTop = Math.max(0, container.scrollTop - 2000);
+      }
+      window.scrollBy(0, -2000);
+
+      try {
+        container.dispatchEvent(new Event("scroll", { bubbles: true }));
+        window.dispatchEvent(new Event("scroll", { bubbles: true }));
+      } catch (e) {}
 
       await new Promise((resolve) => setTimeout(resolve, 250));
 
-      const currentTops = containers.map((c) => (c !== document.documentElement && c.scrollTop !== undefined ? c.scrollTop : window.scrollY));
-      const isUnchanged = currentTops.every((top, idx) => top === previousTops[idx]);
-
-      if (isUnchanged && !allAtZero) {
+      const newScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
+      if (newScrollTop === previousTop) {
         stuckCount++;
-        if (stuckCount >= 8) {
-          break;
-        }
+        if (stuckCount >= 2) break;
       } else {
         stuckCount = 0;
       }
-      previousTops = currentTops;
+      previousTop = newScrollTop;
     }
 
-    containers.forEach((c) => {
-      if (c !== document.documentElement && c.scrollTop !== undefined) {
-        c.scrollTop = 0;
-      }
-      try { c.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {}
-    });
+    if (container !== document.documentElement && container.scrollTop !== undefined) {
+      container.scrollTop = 0;
+    }
     window.scrollTo(0, 0);
-    try { window.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {}
+    try {
+      container.dispatchEvent(new Event("scroll", { bubbles: true }));
+      window.dispatchEvent(new Event("scroll", { bubbles: true }));
+    } catch (e) {}
 
     await new Promise((resolve) => setTimeout(resolve, 400));
   }
