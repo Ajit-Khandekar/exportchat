@@ -220,98 +220,104 @@
     return lines.join("\n").trimEnd();
   }
 
-  function findScrollableContainer() {
+  function findAllScrollableContainers() {
+    const list = new Set();
     const sampleMsg = document.querySelector(
       'div[class*="font-user-message"], [data-testid="user-message"], [data-testid="assistant-message"], div[class*="font-claude"]'
     );
     if (sampleMsg) {
       let el = sampleMsg.parentElement;
       while (el && el !== document.documentElement && el !== document.body) {
-        if (el.scrollHeight > el.clientHeight + 20) {
-          const overflow = window.getComputedStyle(el).overflowY;
-          if (overflow === "auto" || overflow === "scroll" || overflow === "overlay") {
-            return el;
-          }
+        if (el.scrollHeight > el.clientHeight + 10) {
+          list.add(el);
         }
         el = el.parentElement;
       }
     }
 
     const candidates = [
-      document.querySelector("main [class*='overflow-y-auto']"),
-      document.querySelector("[class*='overflow-y-auto']"),
-      document.querySelector("main"),
-      document.documentElement
+      "main [class*='overflow-y-auto']",
+      "[class*='overflow-y-auto']",
+      "main",
     ];
 
-    for (const el of candidates) {
-      if (el && el.scrollHeight > el.clientHeight + 50) {
-        return el;
-      }
+    candidates.forEach((sel) => {
+      document.querySelectorAll(sel).forEach((el) => {
+        if (el && el.scrollHeight > el.clientHeight + 10) {
+          list.add(el);
+        }
+      });
+    });
+
+    if (list.size === 0) {
+      list.add(document.documentElement);
     }
 
-    const allDivs = Array.from(document.querySelectorAll("div, section, main"));
-    for (const el of allDivs) {
-      if (el.scrollHeight > el.clientHeight + 100) {
-        const overflow = window.getComputedStyle(el).overflowY;
-        if (overflow === "auto" || overflow === "scroll" || overflow === "overlay") {
-          return el;
-        }
-      }
-    }
-    return document.documentElement;
+    return Array.from(list);
+  }
+
+  function findScrollableContainer() {
+    const containers = findAllScrollableContainers();
+    return containers[0] || document.documentElement;
   }
 
   async function scrollChatToTopForCapture() {
-    const container = findScrollableContainer();
-    let previousTop = -1;
+    const containers = findAllScrollableContainers();
+    let previousTops = containers.map((c) => (c !== document.documentElement && c.scrollTop !== undefined ? c.scrollTop : window.scrollY));
     let stuckCount = 0;
-    const maxSteps = 30;
+    const maxSteps = 50;
 
     for (let i = 0; i < maxSteps; i++) {
-      const currentScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
+      const allAtZero = containers.every((c) => (c === document.documentElement ? window.scrollY === 0 : c.scrollTop === 0));
 
-      if (container !== document.documentElement && container.scrollTop === 0) {
-        container.scrollTop = 0;
+      if (allAtZero) {
+        containers.forEach((c) => {
+          if (c !== document.documentElement && c.scrollTop !== undefined) c.scrollTop = 0;
+          try { c.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {}
+        });
         window.scrollTo(0, 0);
-        container.dispatchEvent(new Event("scroll", { bubbles: true }));
-        window.dispatchEvent(new Event("scroll", { bubbles: true }));
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        if (container.scrollTop === 0) {
+        try { window.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {}
+
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        const stillAllZero = containers.every((c) => (c === document.documentElement ? window.scrollY === 0 : c.scrollTop === 0));
+        if (stillAllZero) {
           break;
         }
       }
 
-      if (container !== document.documentElement && container.scrollTop !== undefined) {
-        container.scrollTop = Math.max(0, container.scrollTop - 2000);
-      }
-      window.scrollBy(0, -2000);
-
-      try {
-        container.dispatchEvent(new Event("scroll", { bubbles: true }));
-        window.dispatchEvent(new Event("scroll", { bubbles: true }));
-      } catch (e) {}
+      containers.forEach((c) => {
+        if (c !== document.documentElement && c.scrollTop !== undefined) {
+          c.scrollTop = Math.max(0, c.scrollTop - 2500);
+        }
+        try { c.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {}
+      });
+      window.scrollBy(0, -2500);
+      try { window.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {}
 
       await new Promise((resolve) => setTimeout(resolve, 250));
 
-      const newScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
-      if (newScrollTop === previousTop) {
+      const currentTops = containers.map((c) => (c !== document.documentElement && c.scrollTop !== undefined ? c.scrollTop : window.scrollY));
+      const isUnchanged = currentTops.every((top, idx) => top === previousTops[idx]);
+
+      if (isUnchanged && !allAtZero) {
         stuckCount++;
-        if (stuckCount >= 2) break;
+        if (stuckCount >= 8) {
+          break;
+        }
       } else {
         stuckCount = 0;
       }
-      previousTop = newScrollTop;
+      previousTops = currentTops;
     }
 
-    if (container !== document.documentElement && container.scrollTop !== undefined) {
-      container.scrollTop = 0;
-    }
+    containers.forEach((c) => {
+      if (c !== document.documentElement && c.scrollTop !== undefined) {
+        c.scrollTop = 0;
+      }
+      try { c.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {}
+    });
     window.scrollTo(0, 0);
-    try {
-      container.dispatchEvent(new Event("scroll", { bubbles: true }));
-      window.dispatchEvent(new Event("scroll", { bubbles: true }));
-    } catch (e) {}
+    try { window.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {}
 
     await new Promise((resolve) => setTimeout(resolve, 400));
   }
