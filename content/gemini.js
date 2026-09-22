@@ -354,7 +354,7 @@
     return lines.join("\n").trimEnd();
   }
 
-  async function scrollChatToTopForCapture() {
+  async function scrollChatToTopForCapture(onProgressCb) {
     const scrollContainer =
       document.querySelector("infinite-scroller") ||
       document.querySelector("chat-window") ||
@@ -362,24 +362,53 @@
       document.documentElement;
 
     let iterations = 0;
-    const maxIterations = 30;
+    const maxIterations = 35;
+    const accumulatedList = [];
+    const seenKeys = new Set();
+
+    function collectCurrentDOM() {
+      const currentMsgs = extractMessages();
+      currentMsgs.forEach((m) => {
+        const key = m.role + "::" + m.text;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          accumulatedList.push(m);
+        }
+      });
+      if (typeof onProgressCb === "function") {
+        onProgressCb({ count: accumulatedList.length });
+      }
+    }
+
+    collectCurrentDOM();
 
     while ((scrollContainer.scrollTop > 0 || window.scrollY > 0) && iterations < maxIterations) {
-      scrollContainer.scrollTop = Math.max(0, scrollContainer.scrollTop - 1000);
-      window.scrollBy(0, -1000);
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      scrollContainer.scrollTop = Math.max(0, scrollContainer.scrollTop - 1500);
+      window.scrollBy(0, -1500);
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      collectCurrentDOM();
       iterations++;
     }
 
     scrollContainer.scrollTop = 0;
     window.scrollTo(0, 0);
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    collectCurrentDOM();
+
+    return accumulatedList;
   }
 
-  window.ExportChat.getCurrentChat = async function getCurrentChatGemini() {
-    await scrollChatToTopForCapture();
+  window.ExportChat.scrollChatToTop = scrollChatToTopForCapture;
+
+  window.ExportChat.getCurrentChat = async function getCurrentChatGemini(onProgressCb) {
+    const accumulatedMessages = await scrollChatToTopForCapture(onProgressCb);
     const title = getFilename();
-    const messages = extractMessages();
+    let messages = extractMessages();
+
+    if (messages.length < accumulatedMessages.length) {
+      messages = accumulatedMessages;
+    }
+
     return {
       platform: "gemini",
       title,

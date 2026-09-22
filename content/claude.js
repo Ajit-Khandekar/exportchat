@@ -262,11 +262,29 @@
     return document.documentElement;
   }
 
-  async function scrollChatToTopForCapture() {
-    const container = findScrollableContainer();
+  async function scrollChatToTopForCapture(onProgressCb) {
+    const container = findClaudeConversationRoot() || document.documentElement;
     let previousTop = -1;
     let stuckCount = 0;
-    const maxSteps = 30;
+    const maxSteps = 40;
+    const accumulatedList = [];
+    const seenKeys = new Set();
+
+    function collectCurrentDOM() {
+      const currentMsgs = extractClaudeMessages();
+      currentMsgs.forEach((m) => {
+        const key = m.role + "::" + m.text;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          accumulatedList.push(m);
+        }
+      });
+      if (typeof onProgressCb === "function") {
+        onProgressCb({ count: accumulatedList.length });
+      }
+    }
+
+    collectCurrentDOM();
 
     for (let i = 0; i < maxSteps; i++) {
       const currentScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
@@ -277,6 +295,7 @@
         container.dispatchEvent(new Event("scroll", { bubbles: true }));
         window.dispatchEvent(new Event("scroll", { bubbles: true }));
         await new Promise((resolve) => setTimeout(resolve, 300));
+        collectCurrentDOM();
         if (container.scrollTop === 0) {
           break;
         }
@@ -293,6 +312,7 @@
       } catch (e) {}
 
       await new Promise((resolve) => setTimeout(resolve, 250));
+      collectCurrentDOM();
 
       const newScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
       if (newScrollTop === previousTop) {
@@ -314,14 +334,21 @@
     } catch (e) {}
 
     await new Promise((resolve) => setTimeout(resolve, 400));
+    collectCurrentDOM();
+
+    return accumulatedList;
   }
 
   window.ExportChat.scrollChatToTop = scrollChatToTopForCapture;
 
-  window.ExportChat.getCurrentChat = async function getCurrentChatClaude() {
-    await scrollChatToTopForCapture();
+  window.ExportChat.getCurrentChat = async function getCurrentChatClaude(onProgressCb) {
+    const accumulatedMessages = await scrollChatToTopForCapture(onProgressCb);
     const title = getClaudeTitle();
-    const messages = extractClaudeMessages();
+    let messages = extractClaudeMessages();
+
+    if (messages.length < accumulatedMessages.length) {
+      messages = accumulatedMessages;
+    }
 
     const html = buildClaudeConversationHTML(title, messages);
     const text = buildClaudeConversationText(title, messages);

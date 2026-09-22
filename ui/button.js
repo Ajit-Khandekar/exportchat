@@ -80,11 +80,44 @@
     tooltip.className = "exportchat-tooltip";
     tooltip.textContent = "Export this chat";
 
+    const progressBanner = document.createElement("div");
+    progressBanner.className = "exportchat-progress-banner hidden";
+    progressBanner.innerHTML = `
+      <div class="exportchat-progress-spinner"></div>
+      <div class="exportchat-progress-text">Caching conversation... <span class="exportchat-count">0</span> messages</div>
+    `;
+
     container.appendChild(scrollBtn);
     container.appendChild(button);
     container.appendChild(dropdown);
+    container.appendChild(progressBanner);
     container.appendChild(tooltip);
     document.documentElement.appendChild(container);
+
+    function updateProgressUI({ count, isComplete, statusText }) {
+      const countEl = progressBanner.querySelector(".exportchat-count");
+      const textEl = progressBanner.querySelector(".exportchat-progress-text");
+      const spinner = progressBanner.querySelector(".exportchat-progress-spinner");
+
+      if (statusText) {
+        textEl.textContent = statusText;
+      } else if (count !== undefined && countEl) {
+        countEl.textContent = String(count);
+      }
+
+      if (isComplete) {
+        if (spinner) spinner.style.display = "none";
+        textEl.textContent = `✅ ${count || 0} messages captured`;
+        setTimeout(() => {
+          progressBanner.classList.add("hidden");
+          if (spinner) spinner.style.display = "";
+        }, 3000);
+      } else {
+        progressBanner.classList.remove("hidden");
+      }
+    }
+
+    window.ExportChat.updateProgress = updateProgressUI;
 
     scrollBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
@@ -162,11 +195,13 @@
       }
 
       button.classList.add("exportchat-loading");
-      tooltip.textContent = "Loading chat history...";
-      tooltip.classList.add("visible");
+      progressBanner.classList.remove("hidden");
+      updateProgressUI({ count: 0, statusText: "Caching conversation... 0 messages" });
       closeDropdown();
 
-      window.ExportChat.getCurrentChat()
+      window.ExportChat.getCurrentChat(function(progress) {
+        updateProgressUI(progress);
+      })
         .then(function(chat) {
           if (!chat) return;
           try {
@@ -190,9 +225,11 @@
           } catch (e) {
             console.error("[ExportChat] Export failed:", e);
           }
+          updateProgressUI({ count: (chat.messages || []).length, isComplete: true });
         })
         .catch(function(e) {
           console.error("[ExportChat] getCurrentChat failed:", e);
+          updateProgressUI({ statusText: "❌ Export failed", isComplete: true });
         })
         .finally(function() {
           button.classList.remove("exportchat-loading");

@@ -64,11 +64,30 @@
     return document.querySelector("main") || document.documentElement;
   }
 
-  async function scrollChatToTopForCapture() {
+  async function scrollChatToTopForCapture(onProgressCb) {
     const container = findChatGPTConversationRoot();
     let previousTop = -1;
     let stuckCount = 0;
-    const maxSteps = 30;
+    const maxSteps = 40;
+    const accumulatedList = [];
+    const seenKeys = new Set();
+
+    function collectCurrentDOM() {
+      const root = findChatGPTConversationRoot();
+      const currentMsgs = extractChatGPTMessages(root);
+      currentMsgs.forEach((m) => {
+        const key = m.role + "::" + m.text;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          accumulatedList.push(m);
+        }
+      });
+      if (typeof onProgressCb === "function") {
+        onProgressCb({ count: accumulatedList.length });
+      }
+    }
+
+    collectCurrentDOM();
 
     for (let i = 0; i < maxSteps; i++) {
       const currentScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
@@ -79,6 +98,7 @@
         container.dispatchEvent(new Event("scroll", { bubbles: true }));
         window.dispatchEvent(new Event("scroll", { bubbles: true }));
         await new Promise((resolve) => setTimeout(resolve, 300));
+        collectCurrentDOM();
         if (container.scrollTop === 0) {
           break;
         }
@@ -95,6 +115,7 @@
       } catch (e) {}
 
       await new Promise((resolve) => setTimeout(resolve, 250));
+      collectCurrentDOM();
 
       const newScrollTop = container !== document.documentElement && container.scrollTop !== undefined ? container.scrollTop : window.scrollY;
       if (newScrollTop === previousTop) {
@@ -116,6 +137,23 @@
     } catch (e) {}
 
     await new Promise((resolve) => setTimeout(resolve, 400));
+    collectCurrentDOM();
+
+    const finalRoot = findChatGPTConversationRoot();
+    const finalMsgs = extractChatGPTMessages(finalRoot);
+    finalMsgs.forEach((m) => {
+      const key = m.role + "::" + m.text;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        accumulatedList.push(m);
+      }
+    });
+
+    if (typeof onProgressCb === "function") {
+      onProgressCb({ count: accumulatedList.length });
+    }
+
+    return accumulatedList;
   }
 
   window.ExportChat.scrollChatToTop = scrollChatToTopForCapture;
@@ -153,7 +191,8 @@
       }
     });
     clone.querySelectorAll("br").forEach(function(br) { br.replaceWith("\n"); });
-    clone.querySelectorAll("p").forEach(function(p) { p.after("\n"); });
+    clone.querySelectorAll("p, h1, h2, h3, h4, h5, h6, blockquote").forEach(function(p) { p.after("\n\n"); });
+    clone.querySelectorAll("li").forEach(function(li) { li.after("\n"); });
     var text = (clone.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
     text = text.replace(/^(\w+)\n(```\1)/gm, "$2");
     text = text.replace(/Show more\s*Show less/gi, "").trim();
@@ -248,11 +287,15 @@
     return lines.join("\n").trimEnd();
   }
 
-  window.ExportChat.getCurrentChat = async function getCurrentChatChatGPT() {
-    await scrollChatToTopForCapture();
+  window.ExportChat.getCurrentChat = async function getCurrentChatChatGPT(onProgressCb) {
+    const accumulatedMessages = await scrollChatToTopForCapture(onProgressCb);
     const title = getChatGPTTitle();
     const root = findChatGPTConversationRoot();
-    const messages = extractChatGPTMessages(root);
+    let messages = extractChatGPTMessages(root);
+
+    if (messages.length < accumulatedMessages.length) {
+      messages = accumulatedMessages;
+    }
 
     const html = buildChatGPTConversationHTML(title, messages);
     const text = buildChatGPTConversationText(title, messages);
